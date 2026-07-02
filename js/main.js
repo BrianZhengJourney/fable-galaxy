@@ -56,14 +56,59 @@ class App {
     });
     window.addEventListener('resize', () => this._onResize());
 
+    this._settingHash = false;
+    const initialHash = location.hash;           // _buildSystem rewrites the URL — save it
     this._buildSystem(STAR_CATALOG[0]);          // start at home: SOL
     this.rig.snap({ getTarget: () => ORIGIN, dist: this.systemView.overviewDist(), phi: 1.05 });
+    this._applyRoute(initialHash);               // deep link: #/star/body?t=simDays
+    window.addEventListener('hashchange', () => {
+      if (!this._settingHash) this._applyRoute();
+    });
 
     this.clock = new THREE.Clock();
     this.now = 0;
     window.__APP = this;                          // debug/testing hook
     this._frame = this._frame.bind(this);
     this._frame();
+  }
+
+  /* ================= deep links ================= */
+
+  _slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+
+  _bodySlug(p){
+    // "TRAPPIST-1 f" → "f" inside its own system; "EARTH" → "earth"
+    const star = this.systemRec ? this.systemRec.name : '';
+    const short = p.name.startsWith(star) ? p.name.slice(star.length).trim() : p.name;
+    return this._slug(short || p.name);
+  }
+
+  _setHash(){
+    let h = '#/galaxy';
+    if (this.mode === 'system'){
+      h = '#/' + this._slug(this.systemRec.name);
+      if (this.focus && !this.focus.isStar) h += '/' + this._bodySlug(this.focus);
+      h += '?t=' + this.time.simDays.toFixed(1);
+    }
+    this._settingHash = true;
+    history.replaceState(null, '', h);
+    this._settingHash = false;
+  }
+
+  _applyRoute(hash = location.hash){
+    const m = hash.match(/^#\/([^/?]+)(?:\/([^/?]+))?(?:\?t=(-?[\d.]+))?/);
+    if (!m) return;
+    const [, starSlug, bodySlug, t] = m;
+    if (t !== undefined) this.time.simDays = parseFloat(t) || 0;
+    if (starSlug === 'galaxy'){ this.exitToGalaxy(); return; }
+    const rec = STAR_CATALOG.find(r => this._slug(r.name) === starSlug);
+    if (!rec) return;
+    if (!this.systemRec || this.systemRec.name !== rec.name || this.mode !== 'system')
+      this.enterSystem(rec, true);
+    if (bodySlug && this.systemView){
+      const body = this.systemView.planets.find(p => this._bodySlug(p) === bodySlug);
+      if (body) this.focusPlanet(body);
+    }
   }
 
   /* ================= scale transitions ================= */
@@ -160,6 +205,7 @@ class App {
       else if (this.focus && this.focus.isStar) crumbs.push({ label: 'PHOTOSPHERE' });
     }
     this.hud.setCrumbs(crumbs);
+    this._setHash();   // every navigation change is a shareable URL
   }
 
   /* ================= picking ================= */
