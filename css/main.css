@@ -139,6 +139,28 @@ canvas{ display:block; }
 }
 #mapFrame.hidden{ display:none; }
 
+/* ---- event horizon panel ---- */
+#events{
+  position:fixed; right:32px; bottom:118px; z-index:9; width:250px;
+  background:var(--panel-bg); border:1px solid var(--line);
+  border-left:2px solid var(--amber);
+  backdrop-filter:blur(6px); box-shadow:0 0 30px rgba(0,10,20,.6);
+  display:none;
+}
+#events.show{ display:block; }
+.ev-title{ font-family:var(--mono); font-size:9px; letter-spacing:.3em; color:var(--amber);
+  padding:10px 14px 7px; border-bottom:1px solid rgba(98,230,255,.12); }
+.ev-item{
+  padding:7px 14px; cursor:pointer; border-bottom:1px solid rgba(98,230,255,.06);
+  transition:background .15s;
+}
+.ev-item:hover{ background:rgba(255,180,94,.08); }
+.ev-item .l{ font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--text); }
+.ev-item:hover .l{ color:var(--amber); }
+.ev-item .d{ font-family:var(--mono); font-size:9px; letter-spacing:.1em;
+  color:rgba(207,238,247,.45); margin-top:2px; }
+.ev-item .d b{ font-weight:400; color:rgba(98,230,255,.7); }
+
 /* ---- time console ---- */
 #console{
   position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:10;

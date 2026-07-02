@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { TimeSystem } from './core/time.js';
+import { predictEvents } from './core/events.js';
 import { CameraRig } from './core/cameraRig.js';
 import { Input } from './core/input.js';
 import { SystemView } from './scenes/systemView.js';
@@ -129,6 +130,29 @@ class App {
     this.hud.setCatalogVisible(false);
     this.hud.hidePanel();
     this._crumbs();
+    this._events = [];
+    this.hud.setEventsVisible(true);
+    setTimeout(() => this._computeEvents(), 60);   // off the build frame
+  }
+
+  /* ---- event horizon: predicted conjunctions + comet perihelion ---- */
+  _computeEvents(){
+    if (this.mode !== 'system' || !this.systemView) return;
+    const star = this.systemRec.name;
+    const bodies = this.systemView.planets.map(p => ({
+      name: p.name.startsWith(star) ? p.name.slice(star.length).trim() : p.name,
+      period: p.cfg.period,
+      lon: t => p.lonAt(t)
+    }));
+    this._events = predictEvents(bodies, this.systemView.def.comet || null,
+                                 this.time.simDays);
+    this.hud.renderEvents(this._events, d => this.time.fmtDateAt(d),
+      ev => {
+        this.time.simDays = ev.t - 2;      // arrive two days early, slowed down
+        this.time.setRate(2);
+        this.hud.syncTimeButtons(this.time.rate);
+        setTimeout(() => this._computeEvents(), 200);
+      });
   }
 
   enterSystem(rec, viaCatalog = false){
@@ -154,6 +178,7 @@ class App {
     this.hud.setSector('GALACTIC FRAME');
     this.hud.setMinimapVisible(false);
     this.hud.setCatalogVisible(true);
+    this.hud.setEventsVisible(false);
     this.hud.hidePanel();
     this._crumbs();
     // emerge beside the star we left, then drift out for context
@@ -309,6 +334,12 @@ class App {
     if (this.mode === 'system'){
       this.systemView.update(dt, this.time.simDays, this.now);
       this.labels.update(this.camera, this.W, this.H);
+
+      // refresh the event list once time overtakes it (throttled)
+      this._evTick = (this._evTick || 0) + 1;
+      if (this._evTick % 90 === 0 && this._events && this._events.length &&
+          this.time.simDays > this._events[0].t + 0.5)
+        this._computeEvents();
 
       R.setViewport(0, 0, this.W, this.H);
       R.setScissorTest(false);

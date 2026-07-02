@@ -30,8 +30,9 @@ export class TimeSystem {
             : a.toFixed(1) + ' d/s';
     return (ts < 0 ? '−' : '') + '×' + s;
   }
-  fmtDate(){
-    const d = new Date(this.EPOCH + this.simDays * 86400000);
+  fmtDate(){ return this.fmtDateAt(this.simDays); }
+  fmtDateAt(simDays){
+    const d = new Date(this.EPOCH + simDays * 86400000);
     if (isNaN(d.getTime())) return '····-··-··';
     const p = n => (n < 10 ? '0' : '') + n;
     return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) +

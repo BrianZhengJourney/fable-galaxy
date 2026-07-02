@@ -84,6 +84,29 @@ export class Hud {
   }
 
   setSector(name){ $('roSector').textContent = name; }
+  setEventsVisible(on){ $('events').classList.toggle('show', on); }
+
+  renderEvents(events, fmtDateAt, onJump){
+    const list = $('evList');
+    list.innerHTML = '';
+    if (!events.length){
+      const empty = document.createElement('div');
+      empty.className = 'ev-item';
+      empty.innerHTML = '<span class="l">— NO EVENTS IN RANGE —</span>';
+      list.appendChild(empty);
+      return;
+    }
+    for (const ev of events){
+      const item = document.createElement('div');
+      item.className = 'ev-item';
+      const l = document.createElement('div'); l.className = 'l'; l.textContent = ev.label;
+      const d = document.createElement('div'); d.className = 'd';
+      d.innerHTML = ev.type + ' · <b>' + fmtDateAt(ev.t) + '</b>';
+      item.appendChild(l); item.appendChild(d);
+      item.addEventListener('click', () => onJump(ev));
+      list.appendChild(item);
+    }
+  }
   setMinimapVisible(on){ $('mapFrame').classList.toggle('hidden', !on); }
   setCatalogVisible(on){ $('catalog').classList.toggle('show', on); }
 

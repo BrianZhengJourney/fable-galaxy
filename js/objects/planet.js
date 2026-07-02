@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { makePlanetTexture, makeRingTexture } from '../utils/textures.js';
-import { displayPosition, julianDate } from '../data/ephemeris.js';
+import { displayPosition, heliocentric, julianDate } from '../data/ephemeris.js';
 
 const J2000_EPOCH_MS = Date.UTC(2026, 6, 2);   // must match TimeSystem.EPOCH
 
@@ -75,6 +75,14 @@ export class Planet {
       const ma = m.phase + 2 * Math.PI * simDays / m.period;
       m.mesh.position.set(Math.cos(ma) * m.dist, 0, Math.sin(ma) * m.dist);
     }
+  }
+
+  /* heliocentric longitude in radians — the event engine's view of this body */
+  lonAt(simDays){
+    const b = this.cfg;
+    if (b.eph)
+      return heliocentric(b.eph, julianDate(J2000_EPOCH_MS, simDays)).lon * Math.PI / 180;
+    return (b.phase + 2 * Math.PI * simDays / b.period) % (2 * Math.PI);
   }
 
   setHover(on){
