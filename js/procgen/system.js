@@ -5,6 +5,7 @@
 
 import { mulberry, hashStr, weighted, gaussian } from '../utils/rng.js';
 import { starColorHex, starColor, starInfo, cssColor } from '../data/starCatalog.js';
+import { EXOPLANETS } from '../data/exoplanets.js';
 
 const LETTERS = 'bcdefghijk';
 
@@ -26,6 +27,69 @@ const CLASS_NAMES = {
 function pick(rnd, arr){ return arr[(rnd() * arr.length) | 0]; }
 
 export function generateSystem(rec){
+  if (EXOPLANETS[rec.name]) return confirmedSystem(rec, EXOPLANETS[rec.name]);
+  return proceduralSystem(rec);
+}
+
+/* ---- confirmed systems: real radii, periods and temperatures ---- */
+function confirmedSystem(rec, list){
+  const rnd = mulberry(hashStr('exo:' + rec.name));
+  const starVisualR = Math.max(2.4, Math.min(9, 4.6 * Math.pow(rec.radius, 0.45)));
+  let dist = starVisualR + 4;
+  const bodies = list.map((p, i) => {
+    dist += 4.5 + Math.min(9, Math.log10(p.periodDays + 1) * 3.2);
+    const teq = p.teqK || 250;
+    let type;
+    if (p.giant || p.rEarth > 5) type = teq > 800 ? 'gas' : (teq < 200 ? 'ice' : 'gas');
+    else if (teq > 700) type = 'lava';
+    else if (teq > 330) type = weighted(rnd, [['rocky', 2], ['desert', 2], ['toxic', 1]]);
+    else if (teq > 200) type = weighted(rnd, [['ocean', 2], ['rocky', 1], ['desert', 1]]);
+    else type = weighted(rnd, [['ice', 2], ['rocky', 1]]);
+    const r = p.giant || p.rEarth > 5
+      ? Math.min(2.8, 1.4 + p.rEarth * 0.09)
+      : Math.max(0.4, 0.9 * Math.pow(p.rEarth, 0.7));
+    const pal = pick(rnd, PALETTES[type]);
+    const tidal = p.periodDays < 25;      // close-in worlds are likely locked
+    const mass = p.massJ ? p.massJ.toFixed(2) + ' M♃'
+               : p.massE ? p.massE.toFixed(2) + ' M⊕' : '—';
+    return {
+      name: (rec.name + ' ' + p.letter).toUpperCase(),
+      cls: 'CONFIRMED · ' + CLASS_NAMES[type],
+      r, dist, period: p.periodDays,
+      rotP: tidal ? p.periodDays : 0.8 + rnd() * 30,
+      tilt: Math.abs(gaussian(rnd)) * 20,
+      phase: rnd() * Math.PI * 2,
+      view: Math.max(4.5, r * 4.6),
+      tex: { type, base: pal[0], dark: pal[1], light: pal[2], bands: 4 + ((rnd() * 6) | 0) },
+      glow: type === 'lava',
+      info: {
+        'RADIUS': Math.round(p.rEarth * 6371).toLocaleString('en-US') + ' km',
+        'MASS': mass,
+        'EQUILIBRIUM TEMP': Math.round(teq - 273) + ' °C',
+        'ORBITAL PERIOD': p.periodDays > 900
+          ? (p.periodDays / 365.25).toFixed(1) + ' yr' : p.periodDays.toFixed(2) + ' d',
+        'ROTATION': tidal ? 'TIDALLY LOCKED' : '—',
+        'SOURCE': 'NASA ARCHIVE'
+      }
+    };
+  });
+  const rgb = starColor(rec.temp);
+  return {
+    star: {
+      name: rec.name, cls: rec.cls + ' — CONFIRMED SYSTEM',
+      color: starColorHex(rec.temp),
+      bright: cssColor(rgb.map(v => Math.min(1, v * 1.15 + 0.1)), 1),
+      deep: cssColor(rgb, 1),
+      coreRadius: starVisualR, rotP: 18 + rnd() * 30,
+      info: Object.assign(starInfo(rec),
+        { 'CONFIRMED PLANETS': String(list.length) })
+    },
+    bodies, extent: bodies[bodies.length - 1].dist + 12
+  };
+}
+
+/* ---- everything else: seeded procedural worlds ---- */
+function proceduralSystem(rec){
   const rnd = mulberry(hashStr('system:' + rec.name));
   const nPlanets = 2 + ((rnd() * 8) | 0);
   const starVisualR = Math.max(2.4, Math.min(9, 4.6 * Math.pow(rec.radius, 0.45)));
