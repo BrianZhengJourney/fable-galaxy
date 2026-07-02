@@ -23,7 +23,7 @@ export class Planet {
     this.mat = new THREE.MeshStandardMaterial({
       map: makePlanetTexture(cfg.tex, cfg.name),
       roughness: 0.95, metalness: 0.0,
-      emissive: new THREE.Color(cfg.glow ? '#ff5a22' : cfg.tex.base),
+      emissive: new THREE.Color(cfg.glow ? (cfg.emissiveColor || '#ff5a22') : cfg.tex.base),
       emissiveIntensity: this.baseEmissive
     });
     this.mesh = new THREE.Mesh(new THREE.SphereGeometry(cfg.r, 40, 26), this.mat);
@@ -66,6 +66,19 @@ export class Planet {
     if (b.eph){
       // real JPL elements: true heliocentric direction for the current date
       displayPosition(b.eph, julianDate(J2000_EPOCH_MS, simDays), b.dist, this.group.position);
+    } else if (b.kepler){
+      // eccentric Kepler orbit (S-cluster stars around Sgr A*)
+      const K = b.kepler;
+      const M = (K.phase + 2 * Math.PI * simDays / K.period) % (2 * Math.PI);
+      let E = M;
+      for (let k = 0; k < 8; k++)
+        E = E - (E - K.e * Math.sin(E) - M) / (1 - K.e * Math.cos(E));
+      const x = K.a * (Math.cos(E) - K.e);
+      const z = K.a * Math.sqrt(1 - K.e * K.e) * Math.sin(E);
+      const cn = Math.cos(K.node), sn = Math.sin(K.node);
+      const xr = x * cn - z * sn, zr = x * sn + z * cn;
+      const ci = Math.cos(K.incl), si = Math.sin(K.incl);
+      this.group.position.set(xr, -zr * si, zr * ci);
     } else {
       const ang = b.phase + 2 * Math.PI * simDays / b.period;
       this.group.position.set(Math.cos(ang) * b.dist, 0, Math.sin(ang) * b.dist);
@@ -88,6 +101,25 @@ export class Planet {
   setHover(on){
     this.mat.emissiveIntensity = on ? Math.max(0.45, this.baseEmissive) : this.baseEmissive;
   }
+}
+
+/* orbit path for a Kepler body (S-stars): sample its eccentric ellipse */
+export function buildKeplerOrbit(cfg, color = 0x3fa8c8, opacity = 0.33){
+  const K = cfg.kepler, seg = 240, pos = new Float32Array(seg * 3);
+  for (let i = 0; i < seg; i++){
+    const E = (i / seg) * Math.PI * 2;
+    const x = K.a * (Math.cos(E) - K.e);
+    const z = K.a * Math.sqrt(1 - K.e * K.e) * Math.sin(E);
+    const cn = Math.cos(K.node), sn = Math.sin(K.node);
+    const xr = x * cn - z * sn, zr = x * sn + z * cn;
+    const ci = Math.cos(K.incl), si = Math.sin(K.incl);
+    pos[i*3] = xr; pos[i*3+1] = -zr * si; pos[i*3+2] = zr * ci;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return new THREE.LineLoop(g, new THREE.LineBasicMaterial({
+    color, transparent: true, opacity,
+    blending: THREE.AdditiveBlending, depthWrite: false }));
 }
 
 /* orbit path for an ephemeris body: sample the real ellipse over one period */

@@ -35,8 +35,18 @@ export const STAR_CATALOG = [
   { name:'51 PEGASI',      cls:'G2IV', temp:5768,  mass:1.11,  radius:1.27,  lum:1.36,   pos:[268, 9, 172] },
   { name:'HD 209458',      cls:'G0V',  temp:6091,  mass:1.15,  radius:1.16,  lum:1.77,   pos:[288, -10, 184] },
   { name:'ZETA RETICULI',  cls:'G2V',  temp:5720,  mass:0.97,  radius:0.92,  lum:0.79,   pos:[233, -12, 186] },
-  { name:'EPSILON INDI',   cls:'K5V',  temp:4630,  mass:0.75,  radius:0.71,  lum:0.22,   pos:[258, -9, 130] }
+  { name:'EPSILON INDI',   cls:'K5V',  temp:4630,  mass:0.75,  radius:0.71,  lum:0.22,   pos:[258, -9, 130] },
+  { name:'PSR B1257+12',   cls:'PSR',  temp:28000, mass:1.4,   radius:0.00002, lum:0.005, pos:[196, -14, 158], pulsar:true },
+  { name:'SAGITTARIUS A*', cls:'SMBH', temp:30000, mass:4150000, radius:17.6, lum:100000, pos:[0, 1, 0], blackhole:true }
 ];
+
+/* binary companions rendered inside the system view */
+export const COMPANIONS = {
+  'ALPHA CENTAURI': { name:'ALPHA CEN B', cls:'K1V', temp:5260, radiusVis:2.9,
+                      dist:1.35, period:29200 },
+  'SIRIUS':         { name:'SIRIUS B', cls:'DA2 WHITE DWARF', temp:25000, radiusVis:0.9,
+                      dist:1.5, period:18296 }
+};
 
 /* rough blackbody tint by temperature (K) → [r,g,b] 0..1 */
 export function starColor(temp){

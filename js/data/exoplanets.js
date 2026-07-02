@@ -44,5 +44,12 @@ export const EXOPLANETS = {
   ],
   'EPSILON ERIDANI': [
     { letter:'b', rEarth:12.7, massJ:0.66, periodDays:2502,   teqK:150, giant:true }
+  ],
+  /* the first exoplanets ever discovered (Wolszczan & Frail, 1992) —
+     orbiting a millisecond pulsar */
+  'PSR B1257+12': [
+    { letter:'b (DRAUGR)',      rEarth:0.34, massE:0.02, periodDays:25.262,  teqK:200 },
+    { letter:'c (POLTERGEIST)', rEarth:1.6,  massE:4.3,  periodDays:66.542,  teqK:170 },
+    { letter:'d (PHOBETOR)',    rEarth:1.5,  massE:3.9,  periodDays:98.211,  teqK:150 }
   ]
 };

@@ -3,7 +3,7 @@
    label registrations; disposes everything on exit. */
 
 import * as THREE from 'three';
-import { Planet, buildOrbitRing, buildEphemerisOrbit } from '../objects/planet.js';
+import { Planet, buildOrbitRing, buildEphemerisOrbit, buildKeplerOrbit } from '../objects/planet.js';
 import { CentralStar } from '../objects/star.js';
 import { Comet } from '../objects/comet.js';
 import { AsteroidBelt } from '../objects/asteroidBelt.js';
@@ -26,7 +26,9 @@ export class SystemView {
     this.planets = [];
     this.pickTargets = [this.star.pick];
     for (const cfg of systemDef.bodies){
-      this.scene.add(cfg.eph ? buildEphemerisOrbit(cfg) : buildOrbitRing(cfg.dist));
+      this.scene.add(cfg.eph ? buildEphemerisOrbit(cfg)
+                   : cfg.kepler ? buildKeplerOrbit(cfg)
+                   : buildOrbitRing(cfg.dist));
       const p = new Planet(cfg);
       this.scene.add(p.group);
       this.planets.push(p);

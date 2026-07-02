@@ -4,7 +4,7 @@
    shape of SOL_SYSTEM so SystemView renders both identically. */
 
 import { mulberry, hashStr, weighted, gaussian } from '../utils/rng.js';
-import { starColorHex, starColor, starInfo, cssColor } from '../data/starCatalog.js';
+import { starColorHex, starColor, starInfo, cssColor, COMPANIONS } from '../data/starCatalog.js';
 import { EXOPLANETS } from '../data/exoplanets.js';
 
 const LETTERS = 'bcdefghijk';
@@ -27,8 +27,72 @@ const CLASS_NAMES = {
 function pick(rnd, arr){ return arr[(rnd() * arr.length) | 0]; }
 
 export function generateSystem(rec){
-  if (EXOPLANETS[rec.name]) return confirmedSystem(rec, EXOPLANETS[rec.name]);
-  return proceduralSystem(rec);
+  const def = rec.blackhole ? blackHoleSystem(rec)
+            : EXOPLANETS[rec.name] ? confirmedSystem(rec, EXOPLANETS[rec.name])
+            : proceduralSystem(rec);
+  const comp = COMPANIONS[rec.name];
+  if (comp){
+    // binary companion: a glowing stellar body on a wide outer orbit
+    const rgb = starColor(comp.temp);
+    const hex = cssColor(rgb, 1).replace(/rgba\(([\d]+),([\d]+),([\d]+).*/,
+      (m, r, g, b) => '#' + [r, g, b].map(v => (+v).toString(16).padStart(2, '0')).join(''));
+    const dist = def.extent * comp.dist;
+    def.bodies.push({
+      name: comp.name, cls: comp.cls + ' · BINARY COMPANION',
+      r: comp.radiusVis, dist, period: comp.period,
+      rotP: 12, tilt: 0, phase: 2.2,
+      view: Math.max(6, comp.radiusVis * 5),
+      tex: { type: 'cratered', base: '#fff4e0', dark: '#e8d0a8', light: '#ffffff' },
+      glow: true, emissiveColor: hex,
+      info: {
+        'SPECTRAL CLASS': comp.cls,
+        'SURFACE TEMP': comp.temp.toLocaleString('en-US') + ' K',
+        'ORBITAL PERIOD': (comp.period / 365.25).toFixed(1) + ' yr',
+        'STATUS': 'GRAVITATIONALLY BOUND'
+      }
+    });
+    def.extent = dist + 10;
+  }
+  return def;
+}
+
+/* ---- Sagittarius A*: event horizon, accretion disk, and the real
+   S-cluster stars on their (display-compressed) eccentric orbits ---- */
+function blackHoleSystem(rec){
+  const S_STARS = [
+    { name:'S2',  period:5862,  e:0.885, a:30, incl:0.35, node:1.0, phase:2.0,
+      info:{ 'SPECTRAL CLASS':'B0-2V', 'ORBITAL PERIOD':'16.05 yr', 'ECCENTRICITY':'0.885',
+             'PERIAPSIS':'120 AU', 'PERIAPSIS SPEED':'7,650 km/s', 'DISCOVERED':'2002' } },
+    { name:'S38', period:7013,  e:0.818, a:34, incl:-0.5, node:2.4, phase:0.7,
+      info:{ 'SPECTRAL CLASS':'B-TYPE', 'ORBITAL PERIOD':'19.2 yr', 'ECCENTRICITY':'0.818',
+             'PERIAPSIS':'230 AU', 'PERIAPSIS SPEED':'~4,500 km/s', 'DISCOVERED':'2004' } },
+    { name:'S55', period:4675,  e:0.721, a:26, incl:0.8,  node:4.1, phase:4.4,
+      info:{ 'SPECTRAL CLASS':'B-TYPE', 'ORBITAL PERIOD':'12.8 yr', 'ECCENTRICITY':'0.721',
+             'PERIAPSIS':'~190 AU', 'PERIAPSIS SPEED':'~4,900 km/s', 'DISCOVERED':'2012' } }
+  ];
+  const bodies = S_STARS.map(s => ({
+    name: s.name, cls: 'S-CLUSTER STAR',
+    r: 0.7, dist: s.a, period: s.period,
+    kepler: { a: s.a, e: s.e, period: s.period, incl: s.incl, node: s.node, phase: s.phase },
+    rotP: 2, tilt: 0, phase: s.phase, view: 8,
+    tex: { type: 'cratered', base: '#cfe0ff', dark: '#9ab4e8', light: '#ffffff' },
+    glow: true, emissiveColor: '#bcd4ff',
+    info: s.info
+  }));
+  return {
+    star: {
+      name: rec.name, cls: 'SUPERMASSIVE BLACK HOLE · GALACTIC CORE',
+      blackhole: true, color: 0xffa050,
+      bright: '#fff0d0', deep: '#ff9040',
+      coreRadius: 3.0, rotP: 1,
+      info: {
+        'MASS': '4.15 ×10⁶ M☉', 'SCHWARZSCHILD RADIUS': '12.7 ×10⁶ km',
+        'DISTANCE FROM SOL': '26,670 ly', 'S-CLUSTER STARS': String(S_STARS.length),
+        'ACCRETION STATE': 'QUIESCENT', 'FIRST IMAGED': '2022 (EHT)'
+      }
+    },
+    bodies, extent: 55
+  };
 }
 
 /* ---- confirmed systems: real radii, periods and temperatures ---- */
@@ -80,8 +144,11 @@ function confirmedSystem(rec, list){
       color: starColorHex(rec.temp),
       bright: cssColor(rgb.map(v => Math.min(1, v * 1.15 + 0.1)), 1),
       deep: cssColor(rgb, 1),
-      coreRadius: starVisualR, rotP: 18 + rnd() * 30,
+      coreRadius: rec.pulsar ? 1.1 : starVisualR,
+      pulsar: rec.pulsar || false,
+      rotP: 18 + rnd() * 30,
       info: Object.assign(starInfo(rec),
+        rec.pulsar ? { 'SPIN PERIOD': '6.22 ms', 'DISCOVERED': '1990 (ARECIBO)' } : {},
         { 'CONFIRMED PLANETS': String(list.length) })
     },
     bodies, extent: bodies[bodies.length - 1].dist + 12
