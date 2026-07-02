@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FABLE GALAXY // DEEP FIELD COMMAND</title>
+<link rel="stylesheet" href="css/main.css">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+
+<div id="stage"></div>
+
+<!-- cockpit dressing -->
+<div id="vignette"></div>
+<div id="scanlines"></div>
+<div class="corner" id="c-tl"></div><div class="corner" id="c-tr"></div>
+<div class="corner" id="c-bl"></div><div class="corner" id="c-br"></div>
+<div id="flash"></div>
+
+<!-- header + breadcrumb navigation -->
+<div id="hdr">
+  <h1>FABLE GALAXY // DEEP FIELD COMMAND</h1>
+  <div id="crumbs"></div>
+</div>
+
+<div id="hints">
+  DRAG&nbsp;ORBIT &middot; SCROLL&nbsp;ZOOM &middot; CLICK&nbsp;TARGET &middot; ESC&nbsp;ASCEND<br>
+  <span id="audioBtn">AUDIO&nbsp;&#9656;&nbsp;OFF</span>
+  <span id="mapBtn">GALAXY&nbsp;MAP</span>
+</div>
+
+<!-- target data panel -->
+<div id="panel">
+  <div id="p-tag">TARGET LOCK</div>
+  <div id="p-name">&mdash;</div>
+  <div id="p-class">&mdash;</div>
+  <div id="p-rows"></div>
+</div>
+
+<!-- star catalog (galaxy mode) -->
+<div id="catalog">
+  <div class="cat-title">STELLAR CATALOG</div>
+  <div id="catList"></div>
+</div>
+
+<div id="hoverTag"></div>
+<div id="labels"></div>
+
+<div id="mapFrame"><span class="t">SYSTEM PLOT</span></div>
+
+<!-- time console -->
+<div id="console">
+  <div id="readouts">
+    <div class="r"><span>DATE</span><b id="roDate">&mdash;</b></div>
+    <div class="r" id="rRate"><span>RATE</span><b id="roRate">&mdash;</b></div>
+    <div class="r"><span>ELAPSED</span><b id="roElapsed">T+ 0.0 d</b></div>
+    <div class="r"><span>SECTOR</span><b id="roSector">SOL</b></div>
+  </div>
+  <div id="tc">
+    <button class="tbtn" id="btnRev"  title="reverse">&#9668;&#9668;</button>
+    <button class="tbtn" id="btnPause" title="pause">&#10073;&#10073;</button>
+    <button class="tbtn" id="btnPlay" title="play">&#9658;</button>
+    <button class="tbtn" id="btnFF"   title="fast-forward">&#9658;&#9658;</button>
+    <input type="range" id="scrub" min="-100" max="100" step="0.5" value="38">
+  </div>
+</div>
+
+<div id="fatal"><div class="box">
+  <h2>RENDER LINK FAILURE</h2><p id="fatalMsg"></p>
+</div></div>
+
+<script>
+  window.__FATAL = function(msg){
+    document.getElementById('fatalMsg').textContent = msg;
+    document.getElementById('fatal').style.display = 'flex';
+  };
+</script>
+<script type="module">
+  import('./js/main.js')
+    .then(function(m){ m.start(); })
+    .catch(function(e){
+      console.error(e);
+      window.__FATAL('Failed to initialize: ' + (e && e.message ? e.message :
+        'module load error') + ' — check network access to cdn.jsdelivr.net and reload.');
+    });
+  // browsers without import-map/module support never run the block above
+  setTimeout(function(){
+    if (!window.__APP_STARTED && document.getElementById('fatal').style.display !== 'flex')
+      window.__FATAL('The deep-field display requires a browser with ES module and import-map support (any current Chrome, Edge, Firefox or Safari).');
+  }, 8000);
+</script>
+</body>
+</html>
