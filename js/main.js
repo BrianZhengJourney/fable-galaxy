@@ -427,6 +427,12 @@ class App {
     this.focus = this.systemView.findBody('EARTH');   // you are standing on it
     this.hud.flash();
     this.labels.clear();
+    // ground pace: drop to ~30 sim-minutes/sec on entry, restore on exit
+    this._preSkyRate = this.time.rate;
+    if (Math.abs(this.time.rate) > 0.3){
+      this.time.setRate(0.02);
+      this.hud.syncTimeButtons(this.time.rate);
+    }
     this.skyView = new SkyView(this.labels);
     this.mode = 'sky';
     this.skyYaw = Math.PI;            // face south, where the ecliptic rides
@@ -446,6 +452,7 @@ class App {
       'LONGITUDE': Math.abs(OBSERVER.lon).toFixed(2) + '° W',
       'LOCAL SIDEREAL': (st.lstDeg / 15).toFixed(2) + ' h',
       'SUN ALTITUDE': st.sunAlt.toFixed(1) + '°',
+      'TIME MODE': 'CONTINUOUS',
       'CATALOG': 'HYG v4.1 · ' + '5,998 STARS'
     }, [
       { label: '▸ TOGGLE CONSTELLATIONS', cb: () => this.skyView.toggleConstellations() },
@@ -456,6 +463,10 @@ class App {
   exitSky(){
     if (this.mode !== 'sky') return;
     this.hud.flash();
+    if (this._preSkyRate !== undefined && this.time.rate === 0.02){
+      this.time.setRate(this._preSkyRate);        // give back the orrery pace
+      this.hud.syncTimeButtons(this.time.rate);
+    }
     this.skyView.dispose();
     this.skyView = null;
     this.labels.clear();
@@ -642,7 +653,7 @@ class App {
 
     const R = this.renderer;
     if (this.mode === 'sky'){
-      this.skyView.update(this.time.simDays);
+      this.skyView.update(this.time.simDays, this.time.rate);
       this.camera.position.set(0, 2, 0);
       this.camera.rotation.set(this.skyPitch, this.skyYaw, 0);
       this.labels.update(this.camera, this.W, this.H);
@@ -651,9 +662,10 @@ class App {
         // update the live readouts in place (no re-scramble)
         const st = this.skyView.status(this.time.simDays);
         const vs = document.querySelectorAll('#p-rows .v');
-        if (vs.length >= 4){
+        if (vs.length >= 5){
           vs[2].textContent = (st.lstDeg / 15).toFixed(2) + ' h';
           vs[3].textContent = st.sunAlt.toFixed(1) + '°';
+          vs[4].textContent = this.skyView.strobe ? 'DAY-STEP · SUN LOCKED' : 'CONTINUOUS';
         }
       }
       this._renderMain(this.skyView.scene);

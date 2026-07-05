@@ -171,6 +171,8 @@ export class SkyView {
 
     this.pickTargets = [];
     this._basisM = new THREE.Matrix4();
+    this._strobeAnchor = null;
+    this.strobe = false;
   }
 
   toggleConstellations(){
@@ -178,8 +180,11 @@ export class SkyView {
     return this.conLines.visible;
   }
 
-  /* live readouts for the HUD panel */
+  /* live readouts for the HUD panel (match the displayed, possibly
+     day-stepped time so the panel never disagrees with the sky) */
   status(simDays){
+    if (this.strobe && this._strobeAnchor !== null)
+      simDays = Math.round(simDays - this._strobeAnchor) + this._strobeAnchor;
     const jd = julianDate(EPOCH_MS, simDays);
     const th = lst(jd, OBSERVER.lon);
     const s = sunGeo(jd);
@@ -187,7 +192,19 @@ export class SkyView {
     return { lstDeg: th, sunAlt: sunPos.alt };
   }
 
-  update(simDays){
+  update(simDays, rate = 0){
+    /* Day-step time: above ~0.3 d/s a continuous sky strobes through
+       day/night several times a second. Instead, quantize to whole solar
+       days anchored to the time-of-day when fast-forward began — the Sun
+       holds still and the seasons sweep by (stars drift ~1°/night). */
+    this.strobe = Math.abs(rate) > 0.3;
+    if (this.strobe){
+      if (this._strobeAnchor === null)
+        this._strobeAnchor = ((simDays % 1) + 1) % 1;
+      simDays = Math.round(simDays - this._strobeAnchor) + this._strobeAnchor;
+    } else {
+      this._strobeAnchor = null;
+    }
     const jd = julianDate(EPOCH_MS, simDays);
     const th = lst(jd, OBSERVER.lon);
 
