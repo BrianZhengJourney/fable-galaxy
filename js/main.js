@@ -33,7 +33,7 @@ class App {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(this.W, this.H);
-    this.renderer.setClearColor(0x000206);
+    this.renderer.setClearColor(0x000000);   // true-black deep space
     document.getElementById('stage').appendChild(this.renderer.domElement);
 
     this.camera = new THREE.PerspectiveCamera(52, this.W / this.H, 0.1, 4000);
