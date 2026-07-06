@@ -136,6 +136,8 @@ canvas{ display:block; }
   white-space:nowrap;
 }
 .lbl.star{ color:rgba(255,214,160,.9); text-shadow:0 0 8px rgba(255,180,94,.45); }
+.lbl.landmark{ color:rgba(220,170,240,.92); text-shadow:0 0 8px rgba(200,106,216,.5);
+  letter-spacing:.24em; }
 
 /* ---- targeting reticle: corner brackets around the hovered body ---- */
 #reticle{
@@ -241,7 +243,12 @@ canvas{ display:block; }
 #lmCardMeta b{ font-weight:400; color:var(--cyan); }
 #lmCardWow{ font-family:var(--sans); font-size:13px; font-style:italic;
   color:var(--amber); margin-bottom:8px; text-shadow:0 0 10px rgba(255,180,94,.25); }
-#lmCardStory{ font-size:13px; line-height:1.62; color:var(--text); margin-bottom:12px; }
+#lmCardStory{ font-size:13px; line-height:1.62; color:var(--text); margin-bottom:8px;
+  max-height:340px; overflow:hidden; transition:max-height .35s ease, opacity .35s ease; }
+#lmCardStory.clip{ max-height:0; opacity:0; margin-bottom:0; }
+#lmCardCredit{ font-family:var(--mono); font-size:8.5px; letter-spacing:.14em;
+  color:rgba(207,238,247,.4); margin-bottom:11px; }
+#lmCardCredit:empty{ margin-bottom:4px; }
 #lmCardBtns{ display:flex; justify-content:flex-end; gap:9px; flex-wrap:wrap; }
 .lm-btn{ font-family:var(--mono); font-size:10px; letter-spacing:.2em; cursor:pointer;
   padding:5px 13px; border:1px solid var(--line); color:var(--cyan-dim); transition:all .2s; }

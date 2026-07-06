@@ -4,7 +4,8 @@
 
 import * as THREE from 'three';
 import { buildStarSphere } from '../objects/starfield.js';
-import { buildExhibit } from '../procgen/exhibits.js';
+import { buildExhibit, buildImagePlate } from '../procgen/exhibits.js';
+import { landmarkImage } from '../data/landmarkImages.js';
 
 export class LandmarkView {
   constructor(entry){
@@ -12,7 +13,11 @@ export class LandmarkView {
     this.scene = new THREE.Scene();
     this.scene.add(buildStarSphere('lm:' + entry.id));
 
-    this.exhibit = buildExhibit(entry);
+    // real photograph if we have one, else the procedural exhibit
+    const img = landmarkImage(entry.id);
+    this.exhibit = img ? buildImagePlate(entry, img.file) : buildExhibit(entry);
+    this.hasImage = !!img;
+    this.imageCredit = img ? img.credit : null;
     this.scene.add(this.exhibit.group);
 
     // soft lighting for any lit (non-additive) exhibit geometry
@@ -28,7 +33,7 @@ export class LandmarkView {
   minDist(){ return this.focusDist() * 0.35; }
   maxDist(){ return this.focusDist() * 2.6; }
 
-  update(dt){ if (this.exhibit.update) this.exhibit.update(dt); }
+  update(dt, camera){ if (this.exhibit.update) this.exhibit.update(dt, camera); }
 
   dispose(){
     this.scene.traverse(obj => {

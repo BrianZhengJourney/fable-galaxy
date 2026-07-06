@@ -127,6 +127,15 @@ export class Hud {
     $('lmCardMeta').innerHTML = meta.join('');
     $('lmCardWow').textContent = e.wow || '';
     $('lmCardStory').textContent = e.story || '';
+    $('lmCardCredit').textContent = handlers.credit ? 'IMAGE · ' + handlers.credit : '';
+    // less text by default: story collapsed, MORE reveals it
+    const story = $('lmCardStory'), more = $('lmMore');
+    story.classList.add('clip');
+    more.textContent = 'MORE';
+    more.onclick = () => {
+      const clipped = story.classList.toggle('clip');
+      more.textContent = clipped ? 'MORE' : 'LESS';
+    };
     const act = $('lmAction');
     if (handlers.action){ act.textContent = handlers.action.label; act.classList.remove('hidden'); }
     else act.classList.add('hidden');

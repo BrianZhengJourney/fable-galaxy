@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mulberry, hashStr, gaussian } from '../utils/rng.js';
 import { makeGlowTexture } from '../utils/textures.js';
 import { dotTexture } from '../objects/starfield.js';
+import { loadTexture } from '../utils/assets.js';
 
 function glowSprite(inner, mid, size, scale){
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -302,6 +303,56 @@ function radialTex(stops){
   for (const [p, col] of stops) grd.addColorStop(p, col);
   g.fillStyle = grd; g.fillRect(0,0,256,256);
   return new THREE.CanvasTexture(c);
+}
+
+/* ---- REAL IMAGE PLATE: a famous photograph as a floating, camera-facing
+   exhibit on a star backdrop, with a thin glowing frame and gentle life ---- */
+export function buildImagePlate(entry, url){
+  const group = new THREE.Group();
+  group.add(starDust('imgbg:' + entry.id, 520, 220, 0xaab8d8));
+
+  const plate = new THREE.Group();
+  group.add(plate);
+
+  const H = 58;
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x0a1016, transparent: true, opacity: 0.001, side: THREE.DoubleSide });
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(H, H), mat);
+  plate.add(plane);
+
+  const frameMat = new THREE.LineBasicMaterial({ color: 0x62e6ff, transparent: true, opacity: 0.5 });
+  let frame = new THREE.LineLoop(rectGeo(H, H), frameMat);
+  plate.add(frame);
+  // soft backlight so the plate reads as a lit exhibit
+  const halo = glowSprite('rgba(120,180,255,.16)', 'rgba(80,130,220,.04)', 256, H * 1.7);
+  halo.position.z = -6; plate.add(halo);
+
+  loadTexture(url, tex => {
+    const iw = tex.image.width || 16, ih = tex.image.height || 9;
+    const asp = iw / ih;
+    const w = asp >= 1 ? H * asp : H;      // fit within an H-tall box, keep aspect
+    const h = asp >= 1 ? H : H / asp;
+    plane.geometry.dispose(); plane.geometry = new THREE.PlaneGeometry(w, h);
+    mat.map = tex; mat.color.set(0xffffff); mat.opacity = 1; mat.needsUpdate = true;
+    plate.remove(frame); frame.geometry.dispose();
+    frame = new THREE.LineLoop(rectGeo(w, h), frameMat); plate.add(frame);
+    halo.scale.set(Math.max(w, h) * 1.5, Math.max(w, h) * 1.5, 1);
+  });
+
+  let t = 0;
+  return { group, focusDist: 74, isImage: true, update(dt, camera){
+    t += dt;
+    if (camera) plate.quaternion.copy(camera.quaternion);   // billboard toward viewer
+    plate.scale.setScalar(1 + Math.sin(t * 0.28) * 0.008);  // slow breathing
+  }};
+}
+
+function rectGeo(w, h){
+  const x = w/2, y = h/2;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+    -x,-y,0,  x,-y,0,  x,y,0,  -x,y,0 ]), 3));
+  return g;
 }
 
 /* pick a builder by vizStyle */

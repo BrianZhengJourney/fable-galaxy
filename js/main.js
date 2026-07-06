@@ -285,7 +285,8 @@ class App {
       onPrev: () => this._landmarkStep(-1),
       onNext: () => this._landmarkStep(1),
       onExit: () => this.exitLandmark(),
-      action: this._landmarkAction(entry)
+      action: this._landmarkAction(entry),
+      credit: this.landmarkView.imageCredit
     });
     this._crumbs();
     // orbit the exhibit
@@ -402,6 +403,8 @@ class App {
     this.audio.ascend();
     const rec = this.systemRec;
     this.cancelMission();
+    this.hud.hideLandmarkCard();
+    if (this.landmarkView){ this.landmarkView.dispose(); this.landmarkView = null; }
     if (this.skyView){ this.skyView.dispose(); this.skyView = null; }
     if (this.surfaceView){ this.surfaceView.dispose(); this.surfaceView = null; }
     if (this.systemView){ this.systemView.dispose(); this.systemView = null; }
@@ -674,6 +677,7 @@ class App {
       return this.focusPlanet(hit);
     }
     // galaxy mode
+    if (hit && hit.isLandmark) return this.enterLandmark(hit.landmark);
     if (!hit){
       this.galaxyFocus = null;
       this.hud.hidePanel();
@@ -798,7 +802,7 @@ class App {
 
     const R = this.renderer;
     if (this.mode === 'landmark'){
-      this.landmarkView.update(dt);
+      this.landmarkView.update(dt, this.camera);
       this._renderMain(this.landmarkView.scene);
     } else if (this.mode === 'sky'){
       this.skyView.update(this.time.simDays, this.time.rate);
