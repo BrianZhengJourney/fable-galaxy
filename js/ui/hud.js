@@ -90,6 +90,53 @@ export class Hud {
   }
 
   setSector(name){ $('roSector').textContent = name; }
+
+  /* ---- cosmic landmarks catalog + story card ---- */
+  buildLandmarks(entries, categories, onPick){
+    const list = $('lmList');
+    list.innerHTML = '';
+    for (const cat of categories){
+      const inCat = entries.filter(e => e.category === cat.key);
+      if (!inCat.length) continue;
+      const h = document.createElement('div');
+      h.className = 'lm-cat'; h.textContent = cat.label + ' · ' + inCat.length;
+      h.style.color = cat.color;
+      list.appendChild(h);
+      for (const e of inCat){
+        const item = document.createElement('div');
+        item.className = 'lm-item';
+        item.innerHTML = '<div class="n">' + e.name + '</div><div class="s">' +
+          e.designation + '</div>';
+        item.addEventListener('click', () => onPick(e));
+        list.appendChild(item);
+      }
+    }
+  }
+  setLandmarksVisible(on){ $('landmarks').classList.toggle('show', on); }
+
+  showLandmarkCard(e, cat, handlers){
+    $('lmCardCat').textContent = cat ? cat.label : e.category;
+    $('lmCardCat').style.color = cat ? cat.color : 'var(--amber)';
+    $('lmCardName').textContent = e.name;
+    $('lmCardDesig').textContent = e.designation;
+    const meta = [];
+    if (e.distance && e.distance !== '—') meta.push('<span>DISTANCE</span> <b>' + e.distance + '</b>');
+    if (e.date && e.date !== '—') meta.push('<span>DATE</span> <b>' + e.date + '</b>');
+    if (e.raDeg != null) meta.push('<span>RA/DEC</span> <b>' + e.raDeg.toFixed(1) + '° / ' +
+      e.decDeg.toFixed(1) + '°</b>');
+    $('lmCardMeta').innerHTML = meta.join('');
+    $('lmCardWow').textContent = e.wow || '';
+    $('lmCardStory').textContent = e.story || '';
+    const act = $('lmAction');
+    if (handlers.action){ act.textContent = handlers.action.label; act.classList.remove('hidden'); }
+    else act.classList.add('hidden');
+    act.onclick = handlers.action ? handlers.action.cb : null;
+    $('lmPrev').onclick = handlers.onPrev;
+    $('lmNext').onclick = handlers.onNext;
+    $('lmExit').onclick = handlers.onExit;
+    $('lmCard').classList.add('show');
+  }
+  hideLandmarkCard(){ $('lmCard').classList.remove('show'); }
   setEventsVisible(on){ $('events').classList.toggle('show', on); }
   setMissionVisible(on){ $('mission').classList.toggle('show', on); }
   setMissionBody(html){ $('msBody').innerHTML = html; }
