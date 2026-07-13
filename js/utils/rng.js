@@ -1,4 +1,4 @@
-/* Deterministic RNG utilities — everything procedural in Fable Galaxy is
+/* Deterministic RNG utilities — everything procedural in EPOCHARIUM is
    seeded, so the same star always generates the same system. */
 
 export function mulberry(seed){

@@ -1,9 +1,13 @@
-# FABLE GALAXY // Deep Field Command
+# EPOCHARIUM
 
-An interactive, multi-scale 3D galaxy explorer with a sci-fi cockpit aesthetic.
-Pure ES modules + [three.js](https://threejs.org) from a CDN import map, **no
-build step**. Procedural worlds are drawn on canvas at runtime; the real Sol
-system is rendered to near-NASA-Eyes fidelity — 8K albedo, a Blue-Marble
+**An Interactive Atlas of Worlds Through Time.**
+
+EPOCHARIUM is a multi-scale 3D atlas where planets and cosmic landmarks unfold
+as visual timelines. It combines a real-time Sol system, a procedural galaxy,
+and source-grounded field stories in an instrument-like interface. Pure ES
+modules + [three.js](https://threejs.org) load from a CDN import map, with **no
+build step**. Procedural worlds are drawn on canvas at runtime; Sol is rendered
+to near-NASA-Eyes fidelity — 8K albedo, a Blue-Marble
 day/night shader with real city lights on the dark side, ocean-specular glint,
 and surface relief that casts shadow at the terminator (NASA LOLA lunar
 elevation; Mercury/Mars normals derived from albedo). Assets: public
@@ -18,8 +22,8 @@ synthesized WebAudio; the star catalogs come from a small build script.
 Serve the folder with any static file server and open `index.html`:
 
 ```sh
-cd fable-galaxy
-python3 -m http.server 8741
+cd <clone-folder>
+npm start
 # → http://localhost:8741/
 ```
 

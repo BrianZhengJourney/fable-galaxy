@@ -7,10 +7,37 @@ import assert from 'node:assert/strict';
 import { heliocentric, julianDate } from '../js/data/ephemeris.js';
 import { generateSystem } from '../js/procgen/system.js';
 import { predictEvents } from '../js/core/events.js';
+import { Journal } from '../js/core/journal.js';
 import { mulberry, hashStr, weighted } from '../js/utils/rng.js';
 import { STAR_CATALOG } from '../js/data/starCatalog.js';
 
 const rec = name => STAR_CATALOG.find(r => r.name === name);
+
+test('journal migrates the legacy brand key without losing visits', () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const storage = new Map([
+    ['fable-galaxy-journal-v1', JSON.stringify({ MARS: { visits: 2 } })],
+  ]);
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: key => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+    },
+  });
+
+  try{
+    const journal = new Journal();
+    assert.equal(journal.visitCount('MARS'), 2);
+    assert.deepEqual(
+      JSON.parse(storage.get('epocharium-journal-v1')),
+      { MARS: { visits: 2 } },
+    );
+  }finally{
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+    else delete globalThis.localStorage;
+  }
+});
 
 /* ---------------- ephemeris ---------------- */
 

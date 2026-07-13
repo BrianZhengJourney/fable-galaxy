@@ -124,7 +124,7 @@ def write_glb(path: Path, vertices, normals, faces, cell_size: float):
     document = {
         "asset": {
             "version": "2.0",
-            "generator": "fable-galaxy/tools/prepare_pillars_model.py",
+            "generator": "epocharium/tools/prepare_pillars_model.py",
             "extras": {
                 "source": SOURCE_URL,
                 "credit": "Leah Hustak (STScI), Ralf Crawford (STScI)",
