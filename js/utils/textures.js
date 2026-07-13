@@ -21,6 +21,35 @@ export function makeGlowTexture(inner, mid, size = 256){
   });
 }
 
+/* crisp "point of interest" glyph for landmark map markers: a hollow ring with
+   four ticks and a bright core, drawn white so a Sprite's color tints it. Reads
+   clearly against the round, fuzzy glows of the catalog stars. */
+export function makeLandmarkGlyph(size = 128){
+  return canvasTex(size, size, (g, w, h) => {
+    const cx = w/2, cy = h/2, r = w*0.28;
+    g.clearRect(0, 0, w, h);
+    const halo = g.createRadialGradient(cx, cy, 0, cx, cy, w*0.5);
+    halo.addColorStop(0, 'rgba(255,255,255,0.30)');
+    halo.addColorStop(0.5, 'rgba(255,255,255,0.06)');
+    halo.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = halo; g.fillRect(0, 0, w, h);
+    g.lineCap = 'round';
+    g.lineWidth = w*0.038; g.strokeStyle = 'rgba(255,255,255,0.95)';
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI*2); g.stroke();
+    g.beginPath();
+    for (let k = 0; k < 4; k++){
+      const a = k*Math.PI/2 + Math.PI/4;
+      g.moveTo(cx + Math.cos(a)*r*1.18, cy + Math.sin(a)*r*1.18);
+      g.lineTo(cx + Math.cos(a)*r*1.55, cy + Math.sin(a)*r*1.55);
+    }
+    g.stroke();
+    const core = g.createRadialGradient(cx, cy, 0, cx, cy, w*0.10);
+    core.addColorStop(0, 'rgba(255,255,255,1)');
+    core.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = core; g.beginPath(); g.arc(cx, cy, w*0.10, 0, Math.PI*2); g.fill();
+  });
+}
+
 /* soft irregular smoke blob — used for nebulae and galactic dust lanes */
 export function makeSmokeTexture(seedStr, rgba){
   const rnd = mulberry(hashStr(seedStr));

@@ -1,7 +1,17 @@
 /* Cockpit HUD: target panel with instrument-ticking digits, breadcrumbs,
    hover tag, stellar catalog list, time console and the ambient hum. */
 
+import { landmarkImage } from '../data/landmarkImages.js';
+
 function $(id){ return document.getElementById(id); }
+
+function setInteractive(el, on){
+  if (!el) return;
+  if (!on && el.contains(document.activeElement) && document.activeElement instanceof HTMLElement)
+    document.activeElement.blur();
+  el.toggleAttribute('inert', !on);
+  el.setAttribute('aria-hidden', String(!on));
+}
 
 export class Hud {
   constructor(app){
@@ -27,20 +37,39 @@ export class Hud {
       row.appendChild(ks); row.appendChild(vs); rows.appendChild(row);
       this._tickInto(vs, v);
     }
+    const actions = $('p-actions');
+    actions.innerHTML = '';
     const acts = Array.isArray(action) ? action : (action ? [action] : []);
     for (const a of acts){
-      const btn = document.createElement('div');
+      const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = 'p-action';
       btn.textContent = a.label;
       btn.addEventListener('click', a.cb);
-      rows.appendChild(btn);
+      actions.appendChild(btn);
     }
-    $('panel').classList.add('show');
+    const panel = $('panel'), more = $('pMore'), details = $('p-details');
+    panel.classList.remove('expanded');
+    more.textContent = 'DETAILS +';
+    more.setAttribute('aria-expanded', 'false');
+    setInteractive(details, false);
+    more.hidden = !Object.keys(info).length;
+    more.onclick = () => {
+      const expanded = panel.classList.toggle('expanded');
+      more.textContent = expanded ? 'DETAILS −' : 'DETAILS +';
+      more.setAttribute('aria-expanded', String(expanded));
+      setInteractive(details, expanded);
+    };
+    panel.classList.add('show');
+    setInteractive(panel, true);
   }
   hidePanel(){
     for (const t of this.tickTimers) clearInterval(t);
     this.tickTimers = [];
-    $('panel').classList.remove('show');
+    const panel = $('panel');
+    panel.classList.remove('show', 'expanded');
+    setInteractive($('p-details'), false);
+    setInteractive(panel, false);
   }
   _tickInto(el, finalStr){
     const frames = 14;
@@ -70,51 +99,88 @@ export class Hud {
     } else tag.style.display = 'none';
   }
 
-  /* ---- breadcrumbs: GALAXY ▸ STAR ▸ BODY ---- */
+  /* ---- compact context: one back action + the current place ---- */
   setCrumbs(parts){
-    // parts: [{label, action|null}], last one styled as "here"
     const box = $('crumbs');
     box.innerHTML = '';
-    parts.forEach((p, i) => {
-      if (i){
-        const sep = document.createElement('span');
-        sep.className = 'sep'; sep.textContent = '▸';
-        box.appendChild(sep);
-      }
-      const el = document.createElement('span');
-      el.className = 'crumb' + (i === parts.length - 1 ? ' here' : '');
-      el.textContent = p.label;
-      if (p.action && i !== parts.length - 1) el.addEventListener('click', p.action);
-      box.appendChild(el);
-    });
+    const current = parts[parts.length - 1];
+    const parent = parts.slice(0, -1).reverse().find(p => p.action);
+    if (parent){
+      const back = document.createElement('button');
+      back.type = 'button'; back.className = 'crumb back';
+      back.textContent = '← ' + parent.label;
+      back.addEventListener('click', parent.action);
+      box.appendChild(back);
+    }
+    if (current){
+      const here = document.createElement('span');
+      here.className = 'crumb here'; here.textContent = current.label;
+      box.appendChild(here);
+    }
   }
 
   setSector(name){ $('roSector').textContent = name; }
 
   /* ---- cosmic landmarks catalog + story card ---- */
-  buildLandmarks(entries, categories, onPick){
+  buildLandmarks(entries, categories, onPick, options = {}){
+    this._featuredLandmarks = entries;
+    this._archiveLandmarks = options.archive || entries;
+    this._landmarkCategories = categories;
+    this._landmarkPick = onPick;
+    this._landmarkArchiveOpen = false;
+    const toggle = $('lmArchiveToggle');
+    toggle.onclick = () => {
+      this._landmarkArchiveOpen = !this._landmarkArchiveOpen;
+      this._renderLandmarks();
+    };
+    this._renderLandmarks();
+  }
+  _renderLandmarks(){
     const list = $('lmList');
     list.innerHTML = '';
-    for (const cat of categories){
-      const inCat = entries.filter(e => e.category === cat.key);
-      if (!inCat.length) continue;
-      const h = document.createElement('div');
-      h.className = 'lm-cat'; h.textContent = cat.label + ' · ' + inCat.length;
-      h.style.color = cat.color;
-      list.appendChild(h);
-      for (const e of inCat){
-        const item = document.createElement('div');
-        item.className = 'lm-item';
-        item.innerHTML = '<div class="n">' + e.name + '</div><div class="s">' +
-          e.designation + '</div>';
-        item.addEventListener('click', () => onPick(e));
-        list.appendChild(item);
+    const entries = this._landmarkArchiveOpen ? this._archiveLandmarks : this._featuredLandmarks;
+    const groups = this._landmarkArchiveOpen
+      ? this._landmarkCategories.map(cat => ({ cat, entries: entries.filter(e => e.category === cat.key) }))
+      : [{ cat: null, entries }];
+    for (const group of groups){
+      if (!group.entries.length) continue;
+      if (group.cat){
+        const h = document.createElement('div');
+        h.className = 'lm-cat'; h.textContent = group.cat.label;
+        h.style.color = group.cat.color;
+        list.appendChild(h);
       }
+      const grid = document.createElement('div');
+      grid.className = 'lm-grid';
+      for (const e of group.entries){
+        const item = document.createElement('button');
+        item.type = 'button'; item.className = 'lm-item';
+        const img = landmarkImage(e.id);
+        if (img){
+          item.classList.add('has-image');
+          const imageURL = new URL(img.file, document.baseURI).href;
+          item.style.setProperty('--lm-image', `url("${imageURL}")`);
+        }
+        const n = document.createElement('span'); n.className = 'n'; n.textContent = e.name;
+        const s = document.createElement('span'); s.className = 's';
+        s.textContent = e.subtitle || e.designation;
+        item.appendChild(n); item.appendChild(s);
+        item.addEventListener('click', () => this._landmarkPick(e));
+        grid.appendChild(item);
+      }
+      list.appendChild(grid);
     }
+    $('lmCount').textContent = this._landmarkArchiveOpen
+      ? this._archiveLandmarks.length + ' ARCHIVE OBJECTS'
+      : this._featuredLandmarks.length + ' FIELD STORIES';
+    $('lmArchiveToggle').textContent = this._landmarkArchiveOpen
+      ? '← FEATURED STORIES'
+      : 'VIEW FULL ARCHIVE · ' + this._archiveLandmarks.length;
   }
   setLandmarksVisible(on){ $('landmarks').classList.toggle('show', on); }
 
   showLandmarkCard(e, cat, handlers){
+    const experience = handlers.experience || null;
     $('lmCardCat').textContent = cat ? cat.label : e.category;
     $('lmCardCat').style.color = cat ? cat.color : 'var(--amber)';
     $('lmCardName').textContent = e.name;
@@ -125,27 +191,148 @@ export class Hud {
     if (e.raDeg != null) meta.push('<span>RA/DEC</span> <b>' + e.raDeg.toFixed(1) + '° / ' +
       e.decDeg.toFixed(1) + '°</b>');
     $('lmCardMeta').innerHTML = meta.join('');
-    $('lmCardWow').textContent = e.wow || '';
+    $('lmCardWow').textContent = (experience && experience.summary) || e.subtitle || e.famousFor || '';
+    $('lmCardFact').textContent = e.wow || '';
     $('lmCardStory').textContent = e.story || '';
+    $('lmCardNote').textContent = experience ? experience.note || '' : '';
     $('lmCardCredit').textContent = handlers.credit ? 'IMAGE · ' + handlers.credit : '';
-    // less text by default: story collapsed, MORE reveals it
-    const story = $('lmCardStory'), more = $('lmMore');
-    story.classList.add('clip');
-    more.textContent = 'MORE';
+    const card = $('lmCard'), details = $('lmCardDetails'), more = $('lmMore');
+    card.classList.remove('expanded');
+    setInteractive(details, false);
+    more.textContent = 'MORE +';
+    more.setAttribute('aria-expanded', 'false');
     more.onclick = () => {
-      const clipped = story.classList.toggle('clip');
-      more.textContent = clipped ? 'MORE' : 'LESS';
+      const expanded = card.classList.toggle('expanded');
+      setInteractive(details, expanded);
+      more.setAttribute('aria-expanded', String(expanded));
+      more.textContent = expanded ? 'LESS −' : 'MORE +';
     };
     const act = $('lmAction');
     if (handlers.action){ act.textContent = handlers.action.label; act.classList.remove('hidden'); }
     else act.classList.add('hidden');
     act.onclick = handlers.action ? handlers.action.cb : null;
+    // wavelength crossfade (exhibits with an aligned IR counterpart)
+    const wave = $('lmWave');
+    if (handlers.wavelength){
+      this._landmarkIR = false;
+      this._landmarkWavelength = handlers.wavelength;
+      this.setLandmarkWavelength(false);
+      wave.classList.remove('hidden');
+      wave.onclick = () => handlers.wavelength(!this._landmarkIR);
+    } else {
+      this._landmarkIR = false; this._landmarkWavelength = null;
+      wave.classList.add('hidden'); wave.onclick = null;
+    }
     $('lmPrev').onclick = handlers.onPrev;
     $('lmNext').onclick = handlers.onNext;
     $('lmExit').onclick = handlers.onExit;
-    $('lmCard').classList.add('show');
+    card.classList.add('show');
+    setInteractive(card, true);
   }
-  hideLandmarkCard(){ $('lmCard').classList.remove('show'); }
+  setLandmarkWavelength(ir){
+    this._landmarkIR = !!ir;
+    const wave = $('lmWave');
+    wave.textContent = ir ? 'VISIBLE' : 'INFRARED';
+    wave.setAttribute('aria-label', ir ? 'Switch to visible light' : 'Switch to infrared');
+  }
+  hideLandmarkCard(){
+    const card = $('lmCard');
+    card.classList.remove('show', 'expanded');
+    setInteractive($('lmCardDetails'), false);
+    setInteractive(card, false);
+  }
+
+  /* ---- semantic milestone rail (not a linear simulation scrubber) ---- */
+  showStoryline(experience, onSelect){
+    this._storyExperience = experience;
+    this._storySelect = onSelect;
+    const track = $('storyTrack');
+    track.innerHTML = '';
+    for (const [index, moment] of experience.moments.entries()){
+      const node = document.createElement('button');
+      node.type = 'button'; node.className = 'story-node'; node.dataset.moment = moment.id;
+      node.id = 'story-tab-' + index;
+      node.setAttribute('role', 'tab');
+      node.setAttribute('aria-label', moment.date + ': ' + moment.title);
+      node.setAttribute('aria-controls', 'storyCopy');
+      node.setAttribute('aria-selected', 'false');
+      node.tabIndex = -1;
+      const dot = document.createElement('i');
+      const label = document.createElement('span'); label.textContent = moment.date;
+      node.appendChild(dot); node.appendChild(label);
+      node.addEventListener('click', () => this.selectStoryMoment(moment.id));
+      node.addEventListener('keydown', event => {
+        const nodes = [...track.querySelectorAll('.story-node')];
+        const current = nodes.indexOf(event.currentTarget);
+        let next = current;
+        if (event.key === 'ArrowRight') next = (current + 1) % nodes.length;
+        else if (event.key === 'ArrowLeft') next = (current - 1 + nodes.length) % nodes.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = nodes.length - 1;
+        else return;
+        event.preventDefault();
+        this.selectStoryMoment(nodes[next].dataset.moment);
+        nodes[next].focus();
+      });
+      track.appendChild(node);
+    }
+    document.body.classList.add('story-mode');
+    setInteractive($('console'), false);
+    const storyline = $('storyline');
+    storyline.classList.add('show');
+    setInteractive(storyline, true);
+    this.selectStoryMoment(experience.defaultMoment || experience.moments[0].id);
+  }
+  selectStoryMoment(id, notify = true){
+    if (!this._storyExperience) return;
+    const moment = this._storyExperience.moments.find(m => m.id === id)
+      || this._storyExperience.moments[0];
+    let activeNode = null;
+    for (const node of document.querySelectorAll('#storyTrack .story-node')){
+      const active = node.dataset.moment === moment.id;
+      node.classList.toggle('active', active);
+      node.setAttribute('aria-selected', String(active));
+      node.tabIndex = active ? 0 : -1;
+      if (active) activeNode = node;
+    }
+    $('storyDate').textContent = moment.date;
+    $('storyKind').textContent = moment.kind || '';
+    $('storyTitle').textContent = moment.title;
+    $('storyText').textContent = moment.text || '';
+    const source = $('storySource');
+    if (moment.source){ source.href = moment.source; source.classList.remove('hidden'); }
+    else { source.removeAttribute('href'); source.classList.add('hidden'); }
+    if (activeNode){
+      $('storyCopy').setAttribute('aria-labelledby', activeNode.id);
+      this._scrollStoryNodeIntoView(activeNode);
+    }
+    if (notify && this._storySelect) this._storySelect(moment);
+  }
+  _scrollStoryNodeIntoView(node){
+    if (this._storyScrollFrame) cancelAnimationFrame(this._storyScrollFrame);
+    this._storyScrollFrame = requestAnimationFrame(() => {
+      this._storyScrollFrame = null;
+      const track = node.parentElement;
+      if (!node.isConnected || !node.classList.contains('active') ||
+          !track || track.scrollWidth <= track.clientWidth + 1) return;
+      const left = node.offsetLeft - (track.clientWidth - node.offsetWidth) / 2;
+      const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      track.scrollTo({ left: Math.max(0, left), behavior: reduced ? 'auto' : 'smooth' });
+    });
+  }
+  hideStoryline(){
+    if (this._storyScrollFrame){
+      cancelAnimationFrame(this._storyScrollFrame);
+      this._storyScrollFrame = null;
+    }
+    document.body.classList.remove('story-mode');
+    const storyline = $('storyline');
+    storyline.classList.remove('show');
+    setInteractive(storyline, false);
+    setInteractive($('console'), true);
+    this._storyExperience = null; this._storySelect = null;
+  }
+  setMode(mode){ document.body.dataset.mode = mode; }
   setEventsVisible(on){ $('events').classList.toggle('show', on); }
   setMissionVisible(on){ $('mission').classList.toggle('show', on); }
   setMissionBody(html){ $('msBody').innerHTML = html; }
@@ -230,6 +417,7 @@ export class Hud {
     $('btnFF').addEventListener('click', () => setRate(time.rate <= 0 ? 40 : time.rate * 4));
     $('btnRev').addEventListener('click', () =>
       setRate(time.rate === 0 ? -10 : (time.rate > 0 ? -time.rate : time.rate * 4)));
+    $('brandBtn').addEventListener('click', () => app.exitToGalaxy());
     $('mapBtn').addEventListener('click', () => app.exitToGalaxy());
     $('audioBtn').addEventListener('click', () => this._toggleAudio());
   }
@@ -238,12 +426,12 @@ export class Hud {
   _toggleAudio(){
     const btn = $('audioBtn');
     const ok = this.app.audio.setEnabled(!this.app.audio.enabled);
-    if (!ok){ btn.textContent = 'AUDIO ▸ N/A'; return; }
+    if (!ok){ btn.textContent = 'SOUND N/A'; return; }
     if (this.app.audio.enabled){
-      btn.textContent = 'AUDIO ▸ ON'; btn.classList.add('on');
+      btn.textContent = 'SOUND ON'; btn.classList.add('on');
       this.app.audio.select();
     } else {
-      btn.textContent = 'AUDIO ▸ OFF'; btn.classList.remove('on');
+      btn.textContent = 'SOUND OFF'; btn.classList.remove('on');
     }
   }
 }

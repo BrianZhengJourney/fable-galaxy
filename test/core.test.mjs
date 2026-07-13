@@ -163,6 +163,12 @@ test('geocentric Mars stays within its geocentric distance range', () => {
 
 import { STARS, STAR_NAMES, REAL_STARS } from '../js/data/gen/brightStars.js';
 import { CONSTELLATION_LINES } from '../js/data/gen/constellations.js';
+import { LANDMARKS } from '../js/data/landmarks.js';
+import {
+  FEATURED_LANDMARK_IDS,
+  LANDMARK_EXPERIENCES,
+  BODY_EXPERIENCES,
+} from '../js/data/fieldStories.js';
 
 test('the generated star catalog is well-formed', () => {
   const n = STARS.mag.length;
@@ -182,4 +188,31 @@ test('constellation lines cover the sky in valid coordinates', () => {
       assert.ok(ra >= 0 && ra < 360);
       assert.ok(dec >= -90 && dec <= 90);
     }
+});
+
+/* ---------------- visual field stories ---------------- */
+
+test('every featured landmark resolves to a curated catalog entry', () => {
+  const catalogIds = new Set(LANDMARKS.map(entry => entry.id));
+  assert.equal(new Set(FEATURED_LANDMARK_IDS).size, FEATURED_LANDMARK_IDS.length);
+  for (const id of FEATURED_LANDMARK_IDS){
+    assert.ok(catalogIds.has(id), id + ': missing catalog entry');
+    assert.ok(LANDMARK_EXPERIENCES[id], id + ': missing experience');
+  }
+});
+
+test('curated field stories have complete, selectable milestones', () => {
+  const stories = [...Object.values(LANDMARK_EXPERIENCES), ...Object.values(BODY_EXPERIENCES)];
+  for (const story of stories){
+    assert.ok(story.summary && story.note);
+    assert.ok(story.moments.length >= 5);
+    const ids = new Set(story.moments.map(moment => moment.id));
+    assert.equal(ids.size, story.moments.length, story.summary + ': duplicate moment id');
+    assert.ok(ids.has(story.defaultMoment), story.summary + ': invalid default moment');
+    for (const moment of story.moments){
+      assert.ok(moment.date && moment.kind && moment.title && moment.text, moment.id);
+      assert.match(moment.source, /^https:\/\//, moment.id + ': invalid source');
+      assert.ok(moment.visual && typeof moment.visual === 'object', moment.id + ': missing visual');
+    }
+  }
 });

@@ -27,6 +27,7 @@ import { Photometer } from './ui/photometer.js';
 import { AudioEngine } from './ui/audio.js';
 import { LandmarkView } from './scenes/landmarkView.js';
 import { LANDMARKS, LANDMARK_CATEGORIES } from './data/landmarks.js';
+import { FEATURED_LANDMARK_IDS, landmarkExperience, bodyExperience } from './data/fieldStories.js';
 
 const ORIGIN = new THREE.Vector3();
 
@@ -131,7 +132,9 @@ class App {
 
   _setHash(){
     let h = '#/galaxy';
-    if (this.mode === 'system' || this.mode === 'surface' || this.mode === 'sky'){
+    if (this.mode === 'landmark' && this.landmarkView){
+      h = '#/landmark/' + this.landmarkView.entry.id;
+    } else if (this.mode === 'system' || this.mode === 'surface' || this.mode === 'sky'){
       h = '#/' + this._slug(this.systemRec.name);
       if (this.focus && !this.focus.isStar) h += '/' + this._bodySlug(this.focus);
       if (this.mode === 'surface') h += '/orbit';
@@ -144,6 +147,12 @@ class App {
   }
 
   _applyRoute(hash = location.hash){
+    const landmarkRoute = hash.match(/^#\/landmark\/([^/?]+)/);
+    if (landmarkRoute){
+      const landmark = LANDMARKS.find(e => e.id === landmarkRoute[1]);
+      if (landmark) this.enterLandmark(landmark);
+      return;
+    }
     const m = hash.match(/^#\/([^/?]+)(?:\/([^/?]+))?(?:\/(orbit|sky))?(?:\?t=(-?[\d.]+))?/);
     if (!m) return;
     const [, starSlug, bodySlug, orbit, t] = m;
@@ -175,7 +184,13 @@ class App {
           import('three/addons/postprocessing/OutputPass.js')
         ]);
       const composer = new EffectComposer(this.renderer);
-      this._renderPass = new RenderPass(this.systemView.scene, this.camera);
+      const initialScene = this.mode === 'landmark' ? this.landmarkView && this.landmarkView.scene
+        : this.mode === 'sky' ? this.skyView && this.skyView.scene
+        : this.mode === 'surface' ? this.surfaceView && this.surfaceView.scene
+        : this.mode === 'galaxy' ? this.galaxyView.scene
+        : this.systemView && this.systemView.scene;
+      if (!initialScene) throw new Error('active render scene is unavailable');
+      this._renderPass = new RenderPass(initialScene, this.camera);
       composer.addPass(this._renderPass);
       composer.addPass(new UnrealBloomPass(
         new THREE.Vector2(this.W, this.H), 0.45, 0.55, 0.62));
@@ -226,7 +241,8 @@ class App {
   /* navigation helpers used by tour steps */
   goHome(){
     const sol = STAR_CATALOG[0];
-    if (!this.systemRec || this.systemRec.name !== 'SOL' || this.mode === 'galaxy')
+    if (!this.systemRec || this.systemRec.name !== 'SOL' ||
+        this.mode === 'galaxy' || this.mode === 'landmark')
       this.enterSystem(sol, true);
     else if (this.mode === 'surface') this.exitSurface();
     else this.systemOverview();
@@ -250,7 +266,10 @@ class App {
   /* ================= cosmic landmarks ================= */
 
   _wireLandmarks(){
-    this.hud.buildLandmarks(LANDMARKS, LANDMARK_CATEGORIES, e => this.enterLandmark(e));
+    this.featuredLandmarks = FEATURED_LANDMARK_IDS
+      .map(id => LANDMARKS.find(e => e.id === id)).filter(Boolean);
+    this.hud.buildLandmarks(this.featuredLandmarks, LANDMARK_CATEGORIES,
+      e => this.enterLandmark(e), { archive: LANDMARKS });
     const btn = document.getElementById('landmarkBtn');
     btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -261,6 +280,13 @@ class App {
   }
 
   enterLandmark(entry){
+    if (this.mode !== 'landmark'){
+      this._hideBodyStory();
+      this._preLandmarkRate = this.time.rate;
+    }
+    this.time.setRate(0);
+    this.hud.syncTimeButtons(this.time.rate);
+    this.hud.hideStoryline();
     this.landmarkIndex = LANDMARKS.indexOf(entry);
     this.hud.setLandmarksVisible(false);
     this.hud.flash();
@@ -273,6 +299,7 @@ class App {
     this.labels.clear();
     this.landmarkView = new LandmarkView(entry);
     this.mode = 'landmark';
+    this.hud.setMode('landmark');
     this.focus = null;
     // hide system-scale instruments, show the story
     this.hud.hidePanel();
@@ -281,32 +308,91 @@ class App {
     this.hud.setCatalogVisible(false);
     this.hud.setSector('LANDMARK');
     const cat = LANDMARK_CATEGORIES.find(c => c.key === entry.category);
+    const experience = landmarkExperience(entry);
     this.hud.showLandmarkCard(entry, cat, {
       onPrev: () => this._landmarkStep(-1),
       onNext: () => this._landmarkStep(1),
       onExit: () => this.exitLandmark(),
       action: this._landmarkAction(entry),
-      credit: this.landmarkView.imageCredit
+      credit: this.landmarkView.imageCredit,
+      experience,
+      wavelength: this.landmarkView.hasIR ? on => this._setLandmarkWavelength(on) : null
     });
     this._crumbs();
     // orbit the exhibit
-    this.rig.autoRotate = true;
+    this.rig.autoRotate = this.landmarkView.autoRotate();
     this.rig.minDist = this.landmarkView.minDist();
     this.rig.maxDist = this.landmarkView.maxDist();
-    this.rig.snap({ getTarget: () => ORIGIN, dist: this.landmarkView.maxDist() * 0.85, phi: 1.05 });
+    const startTheta = this.landmarkView.startTheta();
+    const startPhi = this.landmarkView.startPhi();
+    const startPose = {
+      getTarget: () => ORIGIN,
+      dist: this.landmarkView.maxDist() * 0.85,
+      phi: startPhi == null ? 1.05 : startPhi,
+    };
+    if (startTheta != null) startPose.theta = startTheta;
+    this.rig.snap(startPose);
     this.rig.flyTo({ dist: this.landmarkView.focusDist(), dur: 1.3 });
+    this.hud.showStoryline(experience, moment => this._applyLandmarkMoment(moment));
   }
 
   _landmarkStep(dir){
-    const n = LANDMARKS.length;
-    const i = ((this.landmarkIndex + dir) % n + n) % n;
-    this.enterLandmark(LANDMARKS[i]);
+    const current = this.landmarkView && this.landmarkView.entry;
+    const sequence = current && FEATURED_LANDMARK_IDS.includes(current.id)
+      ? this.featuredLandmarks : LANDMARKS;
+    const at = Math.max(0, sequence.indexOf(current));
+    const i = ((at + dir) % sequence.length + sequence.length) % sequence.length;
+    this.enterLandmark(sequence[i]);
+  }
+
+  _setLandmarkWavelength(on){
+    if (!this.landmarkView) return;
+    this.landmarkView.setIR(on);
+    this.hud.setLandmarkWavelength(on);
+    const experience = landmarkExperience(this.landmarkView.entry);
+    const matched = on
+      ? experience.moments.find(moment => moment.visual && moment.visual.wavelength === 'infrared')
+      : experience.moments.find(moment => moment.id === experience.defaultMoment);
+    if (matched) this.hud.selectStoryMoment(matched.id, false);
+  }
+
+  _applyLandmarkMoment(moment){
+    if (!this.landmarkView || !moment) return;
+    this.landmarkView.setMoment(moment);
+    const visual = moment.visual || {};
+    if (visual.wavelength) this.hud.setLandmarkWavelength(visual.wavelength === 'infrared');
+    const factor = visual.distance == null ? 1 : visual.distance;
+    this.rig.flyTo({
+      getTarget: () => ORIGIN,
+      dist: this.landmarkView.focusDist() * factor,
+      theta: visual.theta,
+      phi: visual.phi,
+      dur: .95,
+    });
+  }
+
+  _restoreLandmarkClock(){
+    if (this._preLandmarkRate === undefined) return;
+    this.time.setRate(this._preLandmarkRate);
+    this._preLandmarkRate = undefined;
+    this.hud.syncTimeButtons(this.time.rate);
+  }
+
+  _leaveLandmark(){
+    if (!this.landmarkView && this._preLandmarkRate === undefined) return false;
+    this.hud.hideStoryline();
+    this._restoreLandmarkClock();
+    this.hud.hideLandmarkCard();
+    const view = this.landmarkView;
+    this.landmarkView = null;       // make repeated transition paths harmless
+    if (view) view.dispose();
+    this.rig.autoRotate = true;     // exhibits may have paused the idle drift
+    return true;
   }
 
   exitLandmark(){
     if (this.mode !== 'landmark') return;
-    this.hud.hideLandmarkCard();
-    if (this.landmarkView){ this.landmarkView.dispose(); this.landmarkView = null; }
+    this._leaveLandmark();
     this.exitToGalaxy();   // plays the ascend cue + rebuilds the galaxy view
   }
 
@@ -317,8 +403,6 @@ class App {
     if (simDays == null) return null;
     return { label: '▸ WITNESS IN SOL SYSTEM', cb: () => {
       const sol = STAR_CATALOG[0];
-      this.hud.hideLandmarkCard();
-      if (this.landmarkView){ this.landmarkView.dispose(); this.landmarkView = null; }
       this.enterSystem(sol, true);
       this.time.simDays = simDays;
       this.time.setRate(0);
@@ -341,6 +425,8 @@ class App {
   /* ================= scale transitions ================= */
 
   _buildSystem(rec){
+    this._leaveLandmark();
+    this._hideBodyStory();
     this.cancelMission();
     if (this.skyView){ this.skyView.dispose(); this.skyView = null; }
     if (this.surfaceView){ this.surfaceView.dispose(); this.surfaceView = null; }
@@ -354,6 +440,7 @@ class App {
     if (this.photometer) this.photometer.reset();
     this.hud.buildCatalog(STAR_CATALOG, r => this.enterSystem(r, true), this.journal);
     this.mode = 'system';
+    this.hud.setMode('system');
     this.focus = null;
     this.galaxyFocus = null;
     this.rig.minDist = 6;
@@ -399,18 +486,20 @@ class App {
 
   exitToGalaxy(){
     if (this.mode === 'galaxy') return;
+    const wasLandmark = this.mode === 'landmark';
+    const leftLandmark = this._leaveLandmark();
+    if (!wasLandmark && !leftLandmark) this._hideBodyStory();
     this.hud.flash();
     this.audio.ascend();
     const rec = this.systemRec;
     this.cancelMission();
-    this.hud.hideLandmarkCard();
-    if (this.landmarkView){ this.landmarkView.dispose(); this.landmarkView = null; }
     if (this.skyView){ this.skyView.dispose(); this.skyView = null; }
     if (this.surfaceView){ this.surfaceView.dispose(); this.surfaceView = null; }
     if (this.systemView){ this.systemView.dispose(); this.systemView = null; }
     this.labels.clear();
     this.galaxyView.registerLabels();
     this.mode = 'galaxy';
+    this.hud.setMode('galaxy');
     this.focus = null;
     this.galaxyFocus = null;
     this.rig.minDist = 14;
@@ -446,6 +535,7 @@ class App {
   /* ================= focus + navigation ================= */
 
   focusPlanet(p){
+    this._hideBodyStory();
     this.focus = p;
     this.audio.select();
     this.rig.minDist = p.r * 2.2;
@@ -459,7 +549,40 @@ class App {
       actions.push({ label: '▸ PLOT TRANSFER FROM HERE', cb: () => this._armTransfer(p) });
     this.hud.showPanel(p.isMoon ? 'SATELLITE LOCK' : 'TARGET LOCK',
       p.name, p.cfg.cls, p.cfg.info, actions);
+    this._showBodyStory(p);
     this._crumbs();
+  }
+
+  _showBodyStory(body){
+    const experience = bodyExperience(this.systemRec && this.systemRec.name, body && body.name);
+    if (!experience) return;
+    if (this._bodyStoryRate === undefined){
+      this._bodyStoryRate = this.time.rate;
+      this.time.setRate(0);
+      this.hud.syncTimeButtons(this.time.rate);
+    }
+    this.hud.showStoryline(experience, moment => this._applyBodyMoment(body, moment));
+  }
+
+  _applyBodyMoment(body, moment){
+    if (!body || !moment || this.mode !== 'system') return;
+    const visual = moment.visual || {};
+    this.rig.flyTo({
+      getTarget: () => body.group.position,
+      dist: body.cfg.view * (visual.distance == null ? 1 : visual.distance),
+      theta: visual.theta,
+      phi: visual.phi,
+      dur: .9,
+    });
+  }
+
+  _hideBodyStory(){
+    if (this._bodyStoryRate !== undefined){
+      this.time.setRate(this._bodyStoryRate);
+      this._bodyStoryRate = undefined;
+      this.hud.syncTimeButtons(this.time.rate);
+    }
+    this.hud.hideStoryline();
   }
 
   /* ---- mission planning: probe on a Hohmann-style transfer ---- */
@@ -518,12 +641,14 @@ class App {
   /* ---- third scale: low orbit around a solid world ---- */
   enterSurface(p){
     if (this.mode !== 'system' || !p || p.isStar || !canDescend(p)) return;
+    this._hideBodyStory();
     this.focus = p;
     this.hud.flash();
     this.audio.jump();
     this.labels.clear();
     this.surfaceView = new SurfaceView(p, this.systemView.def.star);
     this.mode = 'surface';
+    this.hud.setMode('surface');
     this.rig.minDist = this.surfaceView.minDist();
     this.rig.maxDist = this.surfaceView.maxDist();
     this.rig.snap({ getTarget: () => ORIGIN, dist: this.surfaceView.maxDist() * 0.92, phi: 1.2 });
@@ -536,6 +661,7 @@ class App {
   /* ---- night sky: stand on Earth, real sky for the sim date ---- */
   enterSky(){
     if (this.mode !== 'system' || !this.systemRec || this.systemRec.name !== 'SOL') return;
+    this._hideBodyStory();
     this.focus = this.systemView.findBody('EARTH');   // you are standing on it
     this.hud.flash();
     this.audio.jump();
@@ -548,6 +674,7 @@ class App {
     }
     this.skyView = new SkyView(this.labels);
     this.mode = 'sky';
+    this.hud.setMode('sky');
     this.skyYaw = Math.PI;            // face south, where the ecliptic rides
     this.skyPitch = 0.35;
     this.camera.position.set(0, 2, 0);
@@ -585,6 +712,7 @@ class App {
     this.labels.clear();
     this.systemView.registerLabels();
     this.mode = 'system';
+    this.hud.setMode('system');
     this.camera.fov = 52;
     this.camera.rotation.set(0, 0, 0);
     this.camera.updateProjectionMatrix();
@@ -604,15 +732,18 @@ class App {
     this.labels.clear();
     this.systemView.registerLabels();
     this.mode = 'system';
+    this.hud.setMode('system');
     this.rig.minDist = p.r * 2.2;
     this.rig.maxDist = this.systemView.maxDist();
     this.rig.snap({ getTarget: () => p.group.position, dist: p.cfg.view * 2.2 });
     this.rig.flyTo({ dist: p.cfg.view, dur: 1.2 });
     this.hud.setMinimapVisible(true);
     this.hud.setEventsVisible(true);
+    this._showBodyStory(p);
     this._crumbs();
   }
   focusStar(){
+    this._hideBodyStory();
     const s = this.systemView.star;
     this.focus = s;
     this.audio.select();
@@ -622,6 +753,7 @@ class App {
     this._crumbs();
   }
   systemOverview(){
+    this._hideBodyStory();
     this.focus = null;
     this.audio.back();
     this.rig.minDist = 6;
@@ -763,6 +895,7 @@ class App {
   _onKey(e){
     if (e.code === 'Space'){
       e.preventDefault();
+      if (document.body.classList.contains('story-mode')) return;
       this.time.setRate(this.time.rate === 0 ? 10 : 0);
       this.hud.syncTimeButtons(this.time.rate);
     }

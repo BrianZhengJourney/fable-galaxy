@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { buildGalaxy } from '../objects/galaxy.js';
 import { raDecToOffset, SOL_GALAXY_POS } from '../data/starCatalog.js';
 import { LANDMARKS, LANDMARK_CATEGORIES } from '../data/landmarks.js';
-import { makeGlowTexture } from '../utils/textures.js';
+import { FEATURED_LANDMARK_IDS } from '../data/fieldStories.js';
+import { makeLandmarkGlyph } from '../utils/textures.js';
 
 const LY_PER_PC = 3.26156;
 
@@ -38,9 +39,10 @@ export class GalaxyView {
   /* place Milky-Way landmarks (real sky direction, log-compressed distance) as
      clickable category-coloured markers riding the galaxy's rotation */
   _buildLandmarkMarkers(){
-    const glow = makeGlowTexture('rgba(255,255,255,1)', 'rgba(255,255,255,.4)', 128);
-    const pickGeo = new THREE.SphereGeometry(4.5, 8, 6);
-    for (const e of LANDMARKS){
+    const glyph = makeLandmarkGlyph(128);
+    const pickGeo = new THREE.SphereGeometry(6, 8, 6);
+    let idx = 0;
+    for (const e of LANDMARKS.filter(entry => FEATURED_LANDMARK_IDS.includes(entry.id))){
       if (e.raDeg == null || e.decDeg == null) continue;
       const ly = parseLy(e.distance);
       if (ly == null || ly > 120000) continue;               // in-galaxy only
@@ -49,9 +51,10 @@ export class GalaxyView {
         SOL_GALAXY_POS[0] + off[0], SOL_GALAXY_POS[1] + off[1], SOL_GALAXY_POS[2] + off[2]);
       const cat = LANDMARK_CATEGORIES.find(c => c.key === e.category);
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: glow, color: new THREE.Color(cat ? cat.color : '#ffcf80'),
+        map: glyph, color: new THREE.Color(cat ? cat.color : '#ffcf80'),
         blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
-      sp.scale.set(7, 7, 1); sp.position.copy(pos);
+      const base = 11;                                        // bigger than a star glow, so it stands out
+      sp.scale.set(base, base, 1); sp.position.copy(pos);
       this.galaxy.group.add(sp);
       const pick = new THREE.Mesh(pickGeo,
         new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
@@ -59,7 +62,7 @@ export class GalaxyView {
       const marker = { isLandmark: true, landmark: e, name: e.name, sprite: sp };
       pick.userData.body = marker;
       this.galaxy.group.add(pick);
-      this.landmarkMarks.push({ marker, pick, sprite: sp });
+      this.landmarkMarks.push({ marker, pick, sprite: sp, base, phase: idx++ * 1.7 });
     }
   }
 
@@ -74,7 +77,7 @@ export class GalaxyView {
     }
     for (const m of this.landmarkMarks){
       m.marker.labelEntry = this.labels.add(m.marker.name,
-        out => m.sprite.getWorldPosition(out), { fadeDist: 620, cls: 'landmark' });
+        out => m.sprite.getWorldPosition(out), { fadeDist: 1000, cls: 'landmark' });
     }
   }
 
@@ -89,5 +92,12 @@ export class GalaxyView {
 
   update(dt){
     this.galaxy.update(dt);
+    // gentle out-of-phase pulse so landmark markers catch the eye among the stars
+    this._t = (this._t || 0) + dt;
+    for (const m of this.landmarkMarks){
+      const p = 1 + Math.sin(this._t * 2 + m.phase) * 0.14;
+      m.sprite.scale.set(m.base * p, m.base * p, 1);
+      m.sprite.material.opacity = 0.72 + 0.28 * (0.5 + 0.5 * Math.sin(this._t * 2 + m.phase));
+    }
   }
 }

@@ -23,45 +23,50 @@
 <div class="corner" id="c-bl"></div><div class="corner" id="c-br"></div>
 <div id="flash"></div>
 
-<!-- header + breadcrumb navigation -->
+<!-- compact brand + contextual navigation -->
 <div id="hdr">
-  <h1>FABLE GALAXY // DEEP FIELD COMMAND</h1>
+  <button id="brandBtn" type="button" aria-label="Return to galaxy map">FABLE</button>
   <div id="crumbs"></div>
 </div>
 
-<div id="hints">
-  DRAG&nbsp;ORBIT &middot; SCROLL&nbsp;ZOOM &middot; CLICK&nbsp;TARGET &middot; ESC&nbsp;ASCEND<br>
-  <span id="audioBtn">AUDIO&nbsp;&#9656;&nbsp;OFF</span>
-  <span id="mapBtn">GALAXY&nbsp;MAP</span>
-  <span id="tourBtn">TOURS</span>
-  <span id="landmarkBtn">LANDMARKS</span>
+<nav id="hints" aria-label="Primary controls">
+  <button id="audioBtn" type="button" title="Toggle ambient sound">SOUND OFF</button>
+  <button id="mapBtn" type="button" title="Return to the galaxy">MAP</button>
+  <button id="tourBtn" type="button" title="Open guided tours">TOURS</button>
+  <button id="landmarkBtn" type="button" title="Explore field stories">EXPLORE</button>
   <div id="tourMenu"></div>
-</div>
+</nav>
 
 <!-- cosmic landmarks catalog -->
 <div id="landmarks">
   <div class="lm-head">
-    <span class="lm-title">COSMIC LANDMARKS</span>
-    <span id="lmClose">&times;</span>
+    <div><span class="lm-title">EXPLORE</span><span id="lmCount"></span></div>
+    <button id="lmClose" type="button" aria-label="Close explore menu">&times;</button>
   </div>
   <div id="lmList"></div>
+  <button id="lmArchiveToggle" type="button"></button>
 </div>
 
 <!-- landmark story card -->
-<div id="lmCard">
+<div id="lmCard" inert aria-hidden="true">
   <div id="lmCardCat"></div>
   <div id="lmCardName"></div>
-  <div id="lmCardDesig"></div>
-  <div id="lmCardMeta"></div>
   <div id="lmCardWow"></div>
-  <div id="lmCardStory" class="clip"></div>
-  <div id="lmCardCredit"></div>
+  <div id="lmCardDetails" inert aria-hidden="true">
+    <div id="lmCardDesig"></div>
+    <div id="lmCardMeta"></div>
+    <div id="lmCardFact"></div>
+    <div id="lmCardStory"></div>
+    <div id="lmCardNote"></div>
+    <div id="lmCardCredit"></div>
+  </div>
   <div id="lmCardBtns">
-    <span class="lm-btn" id="lmPrev">&#9664; PREV</span>
-    <span class="lm-btn" id="lmMore">MORE</span>
-    <span class="lm-btn" id="lmAction"></span>
-    <span class="lm-btn" id="lmExit">RETURN</span>
-    <span class="lm-btn primary" id="lmNext">NEXT &#9654;</span>
+    <button class="lm-btn icon" id="lmPrev" type="button" aria-label="Previous story">&#8592;</button>
+    <button class="lm-btn hidden" id="lmWave" type="button"></button>
+    <button class="lm-btn" id="lmMore" type="button" aria-expanded="false">MORE +</button>
+    <button class="lm-btn" id="lmAction" type="button"></button>
+    <button class="lm-btn icon" id="lmExit" type="button" aria-label="Close story">&times;</button>
+    <button class="lm-btn primary icon" id="lmNext" type="button" aria-label="Next story">&#8594;</button>
   </div>
 </div>
 
@@ -78,11 +83,13 @@
 </div>
 
 <!-- target data panel -->
-<div id="panel">
+<div id="panel" inert aria-hidden="true">
   <div id="p-tag">TARGET LOCK</div>
   <div id="p-name">&mdash;</div>
   <div id="p-class">&mdash;</div>
-  <div id="p-rows"></div>
+  <div id="p-actions"></div>
+  <button id="pMore" type="button" aria-expanded="false">DETAILS +</button>
+  <div id="p-details" inert aria-hidden="true"><div id="p-rows"></div></div>
 </div>
 
 <!-- star catalog (galaxy mode) -->
@@ -116,8 +123,19 @@
   <div id="evList"></div>
 </div>
 
+<!-- semantic story time: discrete observations, evidence and model forecasts -->
+<section id="storyline" aria-label="Story timeline" inert aria-hidden="true">
+  <div id="storyCopy" role="tabpanel" aria-live="polite">
+    <div id="storyMeta"><span id="storyDate"></span><span id="storyKind"></span></div>
+    <div id="storyTitle"></div>
+    <div id="storyText"></div>
+    <a id="storySource" target="_blank" rel="noopener">SOURCE &#8599;</a>
+  </div>
+  <div id="storyTrack" role="tablist" aria-label="Milestones" aria-orientation="horizontal"></div>
+</section>
+
 <!-- time console -->
-<div id="console">
+<div id="console" aria-hidden="false">
   <div id="readouts">
     <div class="r"><span>DATE</span><b id="roDate">&mdash;</b></div>
     <div class="r" id="rRate"><span>RATE</span><b id="roRate">&mdash;</b></div>

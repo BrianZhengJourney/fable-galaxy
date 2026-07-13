@@ -7,9 +7,16 @@ render on each landmark's card.
 
 Primary sources & licenses:
 
-- **NASA / ESA — Hubble Space Telescope** (public domain): Pillars of Creation,
-  Orion, Ring, Helix, Cat's Eye, Trifid, Crab, SN 1987A, Veil, Whirlpool (M51),
+- **NASA / ESA — Hubble Space Telescope** (public domain): Orion, Ring, Helix,
+  Cat's Eye, Trifid, Crab, SN 1987A, Veil, Whirlpool (M51),
   Sombrero (M104), Hubble Ultra-Deep Field, Shoemaker-Levy 9 impact scars.
+- **ESA/Webb aligned Hubble↔Webb pair** (CC BY 4.0, esawebb.org weic2216e/f):
+  Pillars of Creation visible (`pillars-of-creation.jpg`, Hubble) and
+  near-infrared (`pillars-of-creation-ir.jpg`, JWST NIRCam 2022), using the
+  official 6780×7071 Large JPEGs — used for the exhibit's view-dependent
+  reconstruction and visible↔IR wavelength crossfade. Credit: NASA, ESA, CSA, STScI,
+  J. DePasquale, A. Koekemoer, A. Pagan (STScI), ESA/Hubble and the Hubble
+  Heritage Team.
 - **NASA / ESA / CSA — JWST** (public domain): Carina "Cosmic Cliffs",
   Cassiopeia A (MIRI).
 - **NASA / CXC / SAO — Chandra X-ray Observatory** (public domain):
@@ -29,3 +36,11 @@ Primary sources & licenses:
 
 Full attribution and license terms are on each image's Wikimedia Commons file
 page. CC BY / CC BY-SA images require the visible credit shown on the card.
+
+## 3D landmark models
+
+- **Pillars of Creation four-cloud positioning model** — Leah Hustak (STScI)
+  and Ralf Crawford (STScI), released with NASA/STScI's 2024 multiwavelength
+  visualization. The downloadable positioning-reference STL was decimated and
+  converted to glTF for the interactive exhibit. Source:
+  <https://science.nasa.gov/asset/webb/pillars-of-creation-model-for-3d-printing/>

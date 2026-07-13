@@ -5,7 +5,7 @@
 const I = 'images/';
 
 export const LANDMARK_IMAGES = {
-  'pillars-of-creation': { file: I + 'pillars-of-creation.jpg', credit: "NASA, ESA, and the Hubble Heritage Team (STScI/AURA)" },
+  'pillars-of-creation': { file: I + 'pillars-of-creation.jpg', credit: "NASA, ESA/Hubble & Hubble Heritage Team · CC BY 4.0" },
   'orion-nebula': { file: I + 'orion-nebula.jpg', credit: "NASA, ESA, M. Robberto (STScI/ESA) and the Hubble Space Telescope Orion Treasury Project Team" },
   'carina-nebula': { file: I + 'carina-nebula.jpg', credit: "NASA, ESA, CSA, and STScI (JWST) \u00b7 CC BY 4.0" },
   'horsehead-nebula': { file: I + 'horsehead-nebula.jpg', credit: "Ken Crawford, Rancho Del Sol Observatory \u00b7 CC BY-SA 3.0" },
