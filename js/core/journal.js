@@ -2,8 +2,8 @@
    Persisted in localStorage, so discovery survives reloads — the fog of
    war lifts once per star, permanently. */
 
-const KEY = 'epocharium-journal-v1';
-const LEGACY_KEYS = ['fable-galaxy-journal-v1'];
+const KEY = '47-journal-v1';
+const LEGACY_KEYS = ['epocharium-journal-v1', 'fable-galaxy-journal-v1'];
 
 function loadJournal(){
   const current = localStorage.getItem(KEY);

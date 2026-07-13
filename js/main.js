@@ -1,4 +1,4 @@
-/* EPOCHARIUM — app orchestrator.
+/* 47 — app orchestrator.
    Two scales: 'system' (a star system, Sol or procedural) and 'galaxy'
    (80k-star spiral). Zoom out of a system far enough and you ascend to the
    galactic frame; click a catalog star to hyperjump back down. */
@@ -41,7 +41,7 @@ class App {
     document.getElementById('stage').appendChild(this.renderer.domElement);
     // device tier + adaptive DPR/bloom (sets the initial pixel ratio)
     this.quality = new QualityManager(this);
-    console.info('[epocharium] render tier:', detectTier());
+    console.info('[47] render tier:', detectTier());
 
     this.camera = new THREE.PerspectiveCamera(52, this.W / this.H, 0.1, 4000);
     this.time = new TimeSystem();

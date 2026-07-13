@@ -1,4 +1,4 @@
-/* Deterministic RNG utilities — everything procedural in EPOCHARIUM is
+/* Deterministic RNG utilities — everything procedural in 47 is
    seeded, so the same star always generates the same system. */
 
 export function mulberry(seed){

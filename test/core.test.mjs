@@ -30,7 +30,7 @@ test('journal migrates the legacy brand key without losing visits', () => {
     const journal = new Journal();
     assert.equal(journal.visitCount('MARS'), 2);
     assert.deepEqual(
-      JSON.parse(storage.get('epocharium-journal-v1')),
+      JSON.parse(storage.get('47-journal-v1')),
       { MARS: { visits: 2 } },
     );
   }finally{

@@ -2,7 +2,7 @@
    detectTier() picks a texture tier once, from real GPU capability (max
    texture size), form factor and memory — so weak/mobile devices download
    and hold 2K maps instead of 8K. Override with ?tier=low|high or
-   localStorage 'epocharium-tier'. QualityManager then watches frame time and steps
+   localStorage '47-tier'. QualityManager then watches frame time and steps
    DPR (and finally bloom) down when the GPU can't hold 60fps, back up when
    it can — so it stays smooth and cool across very different hardware. */
 
@@ -15,6 +15,7 @@ export function detectTier(){
   let forced = null;
   try{
     forced = new URLSearchParams(location.search).get('tier')
+             || localStorage.getItem('47-tier')
              || localStorage.getItem('epocharium-tier')
              || localStorage.getItem('fg-tier');
   }catch(e){ /* ignore */ }

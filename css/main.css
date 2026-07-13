@@ -46,7 +46,7 @@ canvas{ display:block; }
 #brandBtn{
   appearance:none; border:0; border-right:1px solid var(--line); padding:2px 15px 2px 0;
   background:transparent; color:var(--cyan); cursor:pointer;
-  font:650 12px/1 var(--sans); letter-spacing:.28em;
+  font:650 14px/1 var(--sans); letter-spacing:.42em;
   text-shadow:0 0 12px rgba(98,230,255,.55); transition:color .2s;
 }
 #brandBtn:hover{ color:#fff; }
@@ -461,7 +461,7 @@ body.story-mode #console{ opacity:0; pointer-events:none; transform:translateX(-
 @media (max-width: 780px){
   .corner{ width:18px; height:18px; }
   #hdr{ top:18px; left:20px; gap:9px; }
-  #brandBtn{ font-size:10px; letter-spacing:.20em; padding-right:10px; }
+  #brandBtn{ font-size:12px; letter-spacing:.30em; padding-right:10px; }
   #crumbs{ font-size:8px; }
   #crumbs button.back{ display:none; }
   #crumbs .crumb.here{ max-width:35vw; }

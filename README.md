@@ -1,8 +1,8 @@
-# EPOCHARIUM
+# 47
 
 **An Interactive Atlas of Worlds Through Time.**
 
-EPOCHARIUM is a multi-scale 3D atlas where planets and cosmic landmarks unfold
+47 is a multi-scale 3D atlas where planets and cosmic landmarks unfold
 as visual timelines. It combines a real-time Sol system, a procedural galaxy,
 and source-grounded field stories in an instrument-like interface. Pure ES
 modules + [three.js](https://threejs.org) load from a CDN import map, with **no
