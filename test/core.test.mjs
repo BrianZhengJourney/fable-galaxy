@@ -18,6 +18,7 @@ import {
   SOL_EPOCHS,
   resolveSolEpoch,
 } from '../js/data/solEpochs.js';
+import { SUPPORTED_PLANET_EPOCH_SURFACES } from '../js/data/planetEpochRecipes.js';
 import { parseAtlasHash } from '../js/core/route.js';
 
 const rec = name => STAR_CATALOG.find(r => r.name === name);
@@ -267,6 +268,7 @@ test('Sol epochs are complete appearance snapshots, never orbital ephemerides', 
   const appearanceKeys = [
     'surface', 'nightStrength', 'cloudOpacity', 'atmosphereStrength',
     'atmosphereColor', 'ringVisible', 'ringOpacity', 'ringUncertain',
+    'retainRelief', 'axialTiltDeg',
   ];
   const forbidden = new Set(['eph', 'dist', 'period', 'phase', 'simDays', 'position']);
   for (const epoch of SOL_EPOCHS){
@@ -292,9 +294,49 @@ test('ancient Earth loses artificial lights while mature belts persist', () => {
   assert.equal(resolveSolEpoch('1000ma').belt.visible, true);
   assert.equal(resolveSolEpoch('5ma').belt.visible, true);
   assert.equal(resolveSolEpoch('1000ma').bodies.SATURN.ringUncertain, true);
-  assert.equal(resolveSolEpoch('1000ma').bodies.JUPITER.surface, 'modeled-weather');
-  assert.equal(resolveSolEpoch('5ma').bodies.JUPITER.surface, 'modeled-weather');
+  assert.equal(resolveSolEpoch('1000ma').bodies.JUPITER.surface, 'modeled-weather-1000ma');
+  assert.equal(resolveSolEpoch('5ma').bodies.JUPITER.surface, 'modeled-weather-5ma');
   assert.equal(resolveSolEpoch('present').bodies.JUPITER.ringVisible, true);
+});
+
+test('other planets receive distinct, sourced visual states only where defensible', () => {
+  const old = resolveSolEpoch('1000ma');
+  const recent = resolveSolEpoch('5ma');
+  const supported = new Set(SUPPORTED_PLANET_EPOCH_SURFACES);
+
+  // Mercury is intentionally stable at globe scale.
+  assert.equal(old.bodies.MERCURY.surface, 'present');
+  assert.equal(recent.bodies.MERCURY.surface, 'present');
+
+  // Venus, Mars and every giant planet get independent epoch visuals.
+  for (const name of ['VENUS', 'MARS', 'JUPITER', 'SATURN', 'URANUS', 'NEPTUNE']){
+    const oldSurface = old.bodies[name].surface;
+    const recentSurface = recent.bodies[name].surface;
+    assert.notEqual(oldSurface, 'present', name + ': missing 1 Ga model');
+    assert.notEqual(recentSurface, 'present', name + ': missing 5 Ma model');
+    assert.notEqual(oldSurface, recentSurface, name + ': epochs share one texture');
+    assert.ok(supported.has(name + ':' + oldSurface), name + ': unsupported 1 Ga surface');
+    assert.ok(supported.has(name + ':' + recentSurface), name + ': unsupported 5 Ma surface');
+  }
+
+  assert.equal(old.bodies.MARS.retainRelief, true);
+  assert.equal(recent.bodies.MARS.retainRelief, true);
+  assert.equal(old.bodies.MARS.axialTiltDeg, 42);
+  assert.equal(recent.bodies.MARS.axialTiltDeg, 42);
+  assert.equal(old.bodies.SATURN.axialTiltDeg, 4);
+  assert.equal(recent.bodies.SATURN.axialTiltDeg, null);
+});
+
+test('every ancient planet model explains its evidence and uncertainty', () => {
+  for (const epoch of [resolveSolEpoch('1000ma'), resolveSolEpoch('5ma')]){
+    assert.deepEqual(Object.keys(epoch.bodyEvidence), SOL_BODY_NAMES);
+    for (const name of SOL_BODY_NAMES){
+      const note = epoch.bodyEvidence[name];
+      assert.ok(note.title && note.text && note.legend && note.evidence, epoch.id + ':' + name);
+      assert.ok(note.sourceLabel, epoch.id + ':' + name + ': source label');
+      assert.match(note.source, /^https:\/\//, epoch.id + ':' + name + ': source');
+    }
+  }
 });
 
 test('Sol epoch resolution is frozen and falls back to present', () => {

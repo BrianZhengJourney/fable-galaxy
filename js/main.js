@@ -29,9 +29,16 @@ import { LandmarkView } from './scenes/landmarkView.js';
 import { LANDMARKS, LANDMARK_CATEGORIES } from './data/landmarks.js';
 import { FEATURED_LANDMARK_IDS, landmarkExperience, bodyExperience } from './data/fieldStories.js';
 import { DEFAULT_SOL_EPOCH, SOL_EPOCHS, resolveSolEpoch } from './data/solEpochs.js';
+import { evictEarthEpochTextures } from './utils/earthEpochTextures.js';
+import { evictPlanetEpochTextures } from './utils/planetEpochTextures.js';
 import { parseAtlasHash } from './core/route.js';
 
 const ORIGIN = new THREE.Vector3();
+
+function evictEpochTextures(){
+  evictEarthEpochTextures();
+  evictPlanetEpochTextures();
+}
 
 class App {
   constructor(){
@@ -304,6 +311,7 @@ class App {
     if (this.surfaceView){ this.surfaceView.dispose(); this.surfaceView = null; }
     if (this.skyView){ this.skyView.dispose(); this.skyView = null; }
     evictTextures();
+    evictEpochTextures();
     this.labels.clear();
     this.landmarkView = new LandmarkView(entry);
     this.mode = 'landmark';
@@ -441,6 +449,7 @@ class App {
     if (this.surfaceView){ this.surfaceView.dispose(); this.surfaceView = null; }
     if (this.systemView) this.systemView.dispose();
     evictTextures();          // free the previous system's real-imagery VRAM
+    evictEpochTextures();
     this.labels.clear();
     const def = rec.sol ? SOL_SYSTEM : generateSystem(rec);
     this.systemView = new SystemView(def, this.labels);
@@ -476,7 +485,8 @@ class App {
     if (this.systemRec && this.systemRec.sol && this.systemView)
       this.systemView.setEpoch(epoch);
     if (this.surfaceView) this.surfaceView.setEpoch(epoch);
-    this.hud.setSolEpoch(epoch);
+    const bodyName = this.focus && !this.focus.isStar ? this.focus.name : null;
+    this.hud.setSolEpoch(epoch, bodyName);
     if (syncStory && this.mode === 'system' && this.systemRec && this.systemRec.sol &&
         this.focus && this.focus.name === 'EARTH'){
       const storyMoment = epoch.id === '1000ma' ? 'earth-rodinia'
@@ -533,6 +543,7 @@ class App {
     if (this.skyView){ this.skyView.dispose(); this.skyView = null; }
     if (this.surfaceView){ this.surfaceView.dispose(); this.surfaceView = null; }
     if (this.systemView){ this.systemView.dispose(); this.systemView = null; }
+    evictEpochTextures();
     this.labels.clear();
     this.galaxyView.registerLabels();
     this.mode = 'galaxy';
@@ -594,6 +605,8 @@ class App {
       actions.push({ label: '▸ PLOT TRANSFER FROM HERE', cb: () => this._armTransfer(p) });
     this.hud.showPanel(p.isMoon ? 'SATELLITE LOCK' : 'TARGET LOCK',
       p.name, p.cfg.cls, p.cfg.info, actions);
+    if (this.systemRec && this.systemRec.sol)
+      this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId), p.name);
     this._showBodyStory(p);
     this._crumbs();
   }
@@ -792,7 +805,7 @@ class App {
     this.hud.setMinimapVisible(true);
     this.hud.setEventsVisible(true);
     this.hud.showSolEpochs(SOL_EPOCHS, id => this.setSolEpoch(id));
-    this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId));
+    this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId), 'EARTH');
   }
 
   exitSurface(){
@@ -814,7 +827,7 @@ class App {
     this.hud.setEventsVisible(true);
     if (this.systemRec && this.systemRec.sol){
       this.hud.showSolEpochs(SOL_EPOCHS, id => this.setSolEpoch(id));
-      this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId));
+      this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId), p.name);
     }
     this._showBodyStory(p);
     this._crumbs();
@@ -827,6 +840,8 @@ class App {
     this.rig.minDist = s.cfg.coreRadius * 2;
     this.rig.flyTo({ getTarget: () => ORIGIN, dist: s.cfg.coreRadius * 4.5, dur: 1.25 });
     this.hud.showPanel('STELLAR LOCK', s.cfg.name, s.cfg.cls, s.cfg.info);
+    if (this.systemRec && this.systemRec.sol)
+      this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId));
     this._crumbs();
   }
   systemOverview(){
@@ -836,6 +851,8 @@ class App {
     this.rig.minDist = 6;
     this.rig.flyTo({ getTarget: () => ORIGIN, dist: this.systemView.overviewDist(), dur: 1.25 });
     this.hud.hidePanel();
+    if (this.systemRec && this.systemRec.sol)
+      this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId));
     this._crumbs();
   }
 

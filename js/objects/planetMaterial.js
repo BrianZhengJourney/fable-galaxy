@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { loadTexture } from '../utils/assets.js';
 import { deriveNormalMap, invertToRoughness } from '../utils/normalmap.js';
 import { getEarthEpochTexture } from '../utils/earthEpochTextures.js';
+import { getPlanetEpochTexture } from '../utils/planetEpochTextures.js';
 
 /* ---- atmospheric limb: a back-side sphere with a rim-fresnel glow ---- */
 export function buildAtmosphere(radius, colorHex, strength = 1.0){
@@ -42,19 +43,19 @@ export function buildAtmosphere(radius, colorHex, strength = 1.0){
   return mesh;
 }
 
-/* Earth has two independent appearance layers:
-   - a reconstructed palaeogeography map blended over the observed map
-   - present-day artificial night lights, with an explicit strength uniform
-   Keeping those uniforms separate is what lets geological time change the
-   globe without touching the orbital clock. */
-function installEarthShader(target){
+/* Every Sol planet keeps its observed texture as a stable shader base. An
+   optional epoch texture blends above it: opaque for modeled cloud/weather
+   maps, alpha-masked for Mars ice/dust. Earth also uses the same shader for
+   its independent artificial-night-light layer. */
+function installEpochShader(target){
   const mat = target.mat;
   if (mat.userData.epochUniforms) return mat.userData.epochUniforms;
+  const earth = targetName(target) === 'EARTH';
   const uniforms = {
     epochMap: { value: null },
     epochBlend: { value: 0 },
     nightMap: { value: null },
-    nightStrength: { value: 1 },
+    nightStrength: { value: earth ? 1 : 0 },
     sunViewDir: { value: new THREE.Vector3(0, 0, 1) },
   };
   mat.userData.epochUniforms = uniforms;
@@ -78,7 +79,7 @@ function installEarthShader(target){
         if (uEpochBlend > 0.001) {
           vec4 fgEpochColor = texture2D(uEpochMap, vMapUv);
           diffuseColor.rgb = mix(diffuseColor.rgb, fgEpochColor.rgb,
-            clamp(uEpochBlend, 0.0, 1.0));
+            clamp(uEpochBlend * fgEpochColor.a, 0.0, 1.0));
         }
       `)
       .replace('#include <emissivemap_fragment>', `
@@ -91,7 +92,7 @@ function installEarthShader(target){
         }
       `);
   };
-  mat.customProgramCacheKey = () => 'fg-earth-epoch-v1';
+  mat.customProgramCacheKey = () => 'fg-planet-epoch-v2';
   mat.needsUpdate = true;
   return uniforms;
 }
@@ -104,11 +105,20 @@ function targetName(target){
    maps and cloud/ring meshes arrive at different times. */
 export function installPlanetAppearance(target){
   if (!target || !target.mat) return null;
+  const earth = targetName(target) === 'EARTH';
   const a = target._appearance || (target._appearance = {
-    surface: 'present', epochBlend: 0, epochBlendTarget: 0,
-    nightStrength: 1, nightStrengthTarget: 1,
+    surface: 'present', activeSurface: 'present',
+    pendingSurface: null, pendingEpochMap: null,
+    epochBlend: 0, epochBlendTarget: 0,
+    nightStrength: earth ? 1 : 0, nightStrengthTarget: earth ? 1 : 0,
+    retainRelief: false,
   });
-  if (targetName(target) === 'EARTH') installEarthShader(target);
+  installEpochShader(target);
+  if (target.spin && a.baseTilt == null){
+    a.baseTilt = target.spin.rotation.z;
+    a.tilt = a.baseTilt;
+    a.tiltTarget = a.baseTilt;
+  }
   if (target.clouds && a.cloudOpacity == null){
     a.cloudOpacity = target.clouds.material.opacity;
     a.cloudOpacityTarget = a.cloudOpacity;
@@ -131,42 +141,67 @@ export function installPlanetAppearance(target){
   return a;
 }
 
-/* Apply a complete, resolved body appearance. Orbit/rotation fields never
-   enter this function. */
+/* Apply a complete, resolved body appearance. Orbital phase and position never
+   enter this function; a few explicitly modeled axial-tilt scenarios may. */
 export function setPlanetAppearance(target, spec){
   const a = installPlanetAppearance(target);
   if (!a || !spec) return;
   const mat = target.mat;
   const earth = targetName(target) === 'EARTH';
   const nextSurface = spec.surface || 'present';
-  if (earth){
-    const uniforms = installEarthShader(target);
-    // Earth's observed albedo remains the shader's base even while a
-    // reconstructed epoch is blended over it. This also makes an ancient
-    // deep link safe when the real texture finishes loading asynchronously.
-    if (target.presentMap) mat.map = target.presentMap;
-    else if (target.fallbackMap) mat.map = target.fallbackMap;
-    if (nextSurface === 'present'){
-      a.epochBlendTarget = 0;
+  let surfaceResolved = true;
+  const uniforms = installEpochShader(target);
+
+  // The observed image is always the base. This makes async texture arrival
+  // safe even while a fully opaque modeled atmosphere is selected.
+  if (target.presentMap) mat.map = target.presentMap;
+  else if (target.fallbackMap) mat.map = target.fallbackMap;
+  if (nextSurface === 'present'){
+    a.pendingSurface = null;
+    a.pendingEpochMap = null;
+    a.epochBlendTarget = 0;
+  } else {
+    const epochMap = earth
+      ? getEarthEpochTexture(nextSurface)
+      : getPlanetEpochTexture(targetName(target), nextSurface);
+    if (epochMap){
+      if (a.activeSurface === nextSurface){
+        // Cancel a pending switch and return to the already-bound map.
+        a.pendingSurface = null;
+        a.pendingEpochMap = null;
+        a.epochBlendTarget = 1;
+      } else if (a.epochBlend > .02 && uniforms.epochMap.value){
+        // Past A → past B is a two-stage transition: fade A to the observed
+        // base, swap the sampler only at zero, then fade B in. New requests
+        // simply replace the pending destination, so interrupted clicks stay
+        // deterministic and never expose a half-blended wrong map.
+        a.pendingSurface = nextSurface;
+        a.pendingEpochMap = epochMap;
+        a.epochBlendTarget = 0;
+      } else {
+        uniforms.epochMap.value = epochMap;
+        a.activeSurface = nextSurface;
+        a.pendingSurface = null;
+        a.pendingEpochMap = null;
+        a.epochBlendTarget = 1;
+      }
     } else {
-      uniforms.epochMap.value = getEarthEpochTexture(nextSurface);
-      // Past-to-past transitions briefly reveal the observed base, making the
-      // continental rearrangement legible instead of popping between maps.
-      if (a.surface !== nextSurface && a.epochBlend > 0.98) a.epochBlend = 0;
-      a.epochBlendTarget = 1;
+      surfaceResolved = false;
+      a.pendingSurface = null;
+      a.pendingEpochMap = null;
+      a.epochBlendTarget = 0;
     }
+  }
+  if (earth){
     a.nightStrengthTarget = spec.nightStrength == null ? 1 : spec.nightStrength;
-    uniforms.epochBlend.value = a.epochBlend;
     uniforms.nightStrength.value = a.nightStrength;
   }
-  if (!earth && target.modelMap){
-    mat.map = nextSurface === 'modeled-weather'
-      ? target.modelMap : (target.presentMap || target.fallbackMap || mat.map);
-  }
-  a.surface = nextSurface;
+  uniforms.epochBlend.value = a.epochBlend;
+  a.surface = surfaceResolved ? nextSurface : 'present';
+  a.retainRelief = surfaceResolved && !!spec.retainRelief;
 
   // Modern relief/specular masks do not align with reconstructed continents.
-  if (nextSurface === 'present'){
+  if (a.surface === 'present' || a.retainRelief){
     if (target.presentNormalMap) mat.normalMap = target.presentNormalMap;
     if (target.presentBumpMap) mat.bumpMap = target.presentBumpMap;
     if (target.presentRoughnessMap) mat.roughnessMap = target.presentRoughnessMap;
@@ -178,9 +213,14 @@ export function setPlanetAppearance(target, spec){
   }
   mat.needsUpdate = true;
 
+  if (target.spin && a.baseTilt != null){
+    a.tiltTarget = spec.axialTiltDeg == null
+      ? a.baseTilt : THREE.MathUtils.degToRad(spec.axialTiltDeg);
+  }
+
   if (target.clouds){
     a.cloudOpacityTarget = spec.cloudOpacity == null ? a.baseCloudOpacity : spec.cloudOpacity;
-    target.clouds.visible = a.cloudOpacityTarget > 0.001;
+    if (a.cloudOpacityTarget > 0.001) target.clouds.visible = true;
   }
   if (target.atmosphere){
     const u = target.atmosphere.userData.atmoMat.uniforms;
@@ -205,16 +245,30 @@ export function updatePlanetAppearance(target, dt, now = 0){
   if (!a) return;
   const k = 1 - Math.exp(-Math.max(0, dt) * 5.2);
   const approach = (value, goal) => value + (goal - value) * k;
+  a.epochBlend = approach(a.epochBlend, a.epochBlendTarget);
+  const u = target.mat.userData.epochUniforms;
+  u.epochBlend.value = a.epochBlend;
+  if (a.pendingEpochMap && a.epochBlend < .02){
+    u.epochMap.value = a.pendingEpochMap;
+    a.activeSurface = a.pendingSurface;
+    a.pendingSurface = null;
+    a.pendingEpochMap = null;
+    a.epochBlend = 0;
+    a.epochBlendTarget = 1;
+    u.epochBlend.value = 0;
+  }
   if (targetName(target) === 'EARTH'){
-    a.epochBlend = approach(a.epochBlend, a.epochBlendTarget);
     a.nightStrength = approach(a.nightStrength, a.nightStrengthTarget);
-    const u = target.mat.userData.epochUniforms;
-    u.epochBlend.value = a.epochBlend;
     u.nightStrength.value = a.nightStrength;
+  }
+  if (target.spin && a.tiltTarget != null){
+    a.tilt = approach(a.tilt, a.tiltTarget);
+    target.spin.rotation.z = a.tilt;
   }
   if (target.clouds && a.cloudOpacityTarget != null){
     a.cloudOpacity = approach(a.cloudOpacity, a.cloudOpacityTarget);
     target.clouds.material.opacity = a.cloudOpacity;
+    target.clouds.visible = a.cloudOpacity > 0.001 || a.cloudOpacityTarget > 0.001;
   }
   if (target.atmosphere && a.atmosphereStrengthTarget != null){
     a.atmosphereStrength = approach(a.atmosphereStrength, a.atmosphereStrengthTarget);
@@ -230,8 +284,13 @@ export function updatePlanetAppearance(target, dt, now = 0){
 
 /* Attach a city-light map without resetting the selected geological epoch. */
 function addNightLights(target, nightTex){
-  const uniforms = installEarthShader(target);
+  const uniforms = installEpochShader(target);
   uniforms.nightMap.value = nightTex;
+}
+
+function usesPresentRelief(target){
+  return !target._appearance || target._appearance.surface === 'present'
+    || target._appearance.retainRelief;
 }
 
 /* apply a real-imagery texture set to a planet's material + subobjects.
@@ -245,13 +304,12 @@ export function applyRealTextures(planet, set){
       planet.fallbackMap.dispose();
     planet.fallbackMap = null;
     planet.presentMap = tex;
-    const earth = targetName(planet) === 'EARTH';
-    if (earth || !planet._appearance || planet._appearance.surface === 'present') mat.map = tex;
+    mat.map = tex;
     mat.emissive.set(0x000000);
     planet.baseEmissive = 0;
     mat.emissiveIntensity = 0;
     planet.presentRoughness = 0.92; planet.presentMetalness = 0;
-    if (!planet._appearance || planet._appearance.surface === 'present'){
+    if (usesPresentRelief(planet)){
       mat.roughness = planet.presentRoughness; mat.metalness = planet.presentMetalness;
     }
     mat.needsUpdate = true;
@@ -259,7 +317,7 @@ export function applyRealTextures(planet, set){
     if (set.deriveBump && !set.normal && !set.bump){
       try{
         planet.presentNormalMap = deriveNormalMap(tex.image, set.deriveBump);
-        if (!planet._appearance || planet._appearance.surface === 'present')
+        if (usesPresentRelief(planet))
           mat.normalMap = planet.presentNormalMap;
         mat.normalScale = new THREE.Vector2(0.85, 0.85);
         mat.needsUpdate = true;
@@ -270,7 +328,7 @@ export function applyRealTextures(planet, set){
   if (set.normal)
     loadTexture(set.normal, tex => {
       planet.presentNormalMap = tex;
-      if (!planet._appearance || planet._appearance.surface === 'present') mat.normalMap = tex;
+      if (usesPresentRelief(planet)) mat.normalMap = tex;
       mat.normalScale = new THREE.Vector2(set.normalScale || 1, set.normalScale || 1);
       mat.needsUpdate = true;
     }, { srgb: false });
@@ -278,7 +336,7 @@ export function applyRealTextures(planet, set){
   if (set.bump)
     loadTexture(set.bump, tex => {
       planet.presentBumpMap = tex;
-      if (!planet._appearance || planet._appearance.surface === 'present') mat.bumpMap = tex;
+      if (usesPresentRelief(planet)) mat.bumpMap = tex;
       mat.bumpScale = set.bumpScale || 0.04; mat.needsUpdate = true;
     }, { srgb: false });
 
@@ -286,10 +344,10 @@ export function applyRealTextures(planet, set){
     loadTexture(set.specular, tex => {
       try{
         planet.presentRoughnessMap = invertToRoughness(tex.image);
-        if (!planet._appearance || planet._appearance.surface === 'present')
+        if (usesPresentRelief(planet))
           mat.roughnessMap = planet.presentRoughnessMap;
         planet.presentRoughness = 1.0; planet.presentMetalness = 0.08;
-        if (!planet._appearance || planet._appearance.surface === 'present'){
+        if (usesPresentRelief(planet)){
           mat.roughness = planet.presentRoughness; mat.metalness = planet.presentMetalness;
         }
         mat.needsUpdate = true;

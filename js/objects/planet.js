@@ -37,12 +37,6 @@ export class Planet {
       emissiveIntensity: this.baseEmissive
     });
     this.fallbackMap = this.mat.map;
-    // Jupiter's observed albedo contains today's Great Red Spot. Deep-time
-    // states use a separately seeded, spot-free belt model instead of copying
-    // one modern storm backward by millions or billions of years.
-    this.modelMap = cfg.name === 'JUPITER'
-      ? makePlanetTexture({ ...cfg.tex, spot: false }, 'JUPITER:modeled-weather')
-      : null;
     // real bodies get denser geometry so normal-mapped relief reads at the limb
     const real = PLANET_TEXTURES[cfg.name];
     const seg = real ? 128 : 48, segH = real ? 64 : 32;
@@ -148,7 +142,7 @@ export class Planet {
 
     this._hoverAmt = 0;
     this._hoverTarget = 0;
-    installPlanetAppearance(this);
+    if (real) installPlanetAppearance(this);
   }
 
   /* pure orbital position — mission planning samples this at arbitrary times */
@@ -208,11 +202,6 @@ export class Planet {
   setHover(on){ this._hoverTarget = on ? 1 : 0; }
 
   setAppearance(spec){ setPlanetAppearance(this, spec); }
-
-  disposeAppearance(){
-    if (this.modelMap && this.modelMap !== this.mat.map) this.modelMap.dispose();
-    this.modelMap = null;
-  }
 
   /* keep the day/night + atmosphere shaders pointed at the sun (view space) */
   syncSun(camera){

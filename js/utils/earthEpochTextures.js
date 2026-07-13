@@ -291,3 +291,8 @@ export function getEarthEpochTexture(id){
   cache.set(key, texture);
   return texture;
 }
+
+export function evictEarthEpochTextures(){
+  for (const texture of cache.values()) texture.dispose();
+  cache.clear();
+}

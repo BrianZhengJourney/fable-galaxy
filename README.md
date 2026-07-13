@@ -61,16 +61,26 @@ Three nested scales, seamlessly connected:
   (Keplerian elements + centennial rates): the date readout shows where the
   planets truly are. Saturn's rings, moons, the asteroid belt, and a
   long-period comet whose tail always points away from the star.
-- **Model epoch** — a separate appearance control changes the Sun, Earth
-  palaeogeography, artificial night lights, atmospheres and ring confidence at
-  1 Ga, 5 Ma and today. It never feeds ancient dates into the present-valid
+- **Model epoch** — a separate appearance control changes the Sun, rocky-world
+  climate overlays, giant-planet weather, artificial night lights, axial-tilt
+  scenarios and ring confidence at 1 Ga, 5 Ma and today. Mercury stays
+  effectively unchanged at globe scale; Venus receives new dynamic cloud
+  markings; Mars moves ice away from its poles in a labeled high-obliquity
+  scenario; and each gas/ice giant receives a different deterministic weather
+  map with modern named storms removed. It never feeds ancient dates into the present-valid
   ephemeris: exact planetary phases are not reconstructable at 1 Ga. The
   hand-authored Rodinia and Pliocene globes are schematic artist's
   reconstructions inspired by the [Merdith et al. full-plate model](https://doi.org/10.1016/j.earscirev.2020.103477)
   and [Scotese–Wright PaleoDEM archive](https://doi.org/10.5281/zenodo.5460860),
   not rasters derived from either dataset. The asteroid belt remains present
-  in both mature epochs. Saturn's
-  ghosted 1 Ga rings explicitly encode an unresolved age, not known absence.
+  in both mature epochs. Saturn's ghosted 1 Ga rings explicitly encode an
+  unresolved age, not known absence; its near-upright ancient axis is one
+  [Titan-migration hypothesis](https://doi.org/10.1038/s41550-020-01284-x),
+  not settled history. Model sources include [Mars obliquity/ice migration](https://doi.org/10.1038/nature03055),
+  [Venus cloud dynamics](https://www.esa.int/Science_Exploration/Space_Science/Chasing_clouds_on_Venus),
+  [Jupiter's likely young Great Red Spot](https://doi.org/10.1029/2024GL108993),
+  [Uranus seasonal color](https://doi.org/10.1093/mnras/stad3761), and
+  [Neptune vortex lifetimes](https://doi.org/10.3847/1538-3881/ab0747).
 - **Galaxy view** — zoom all the way out (or `ESC` / GALAXY MAP) and ascend
   to a procedural spiral galaxy: ~80,000 stars on four logarithmic arms with
   bulge, halo, dust lanes and nebulae, via a custom point shader.
@@ -151,6 +161,7 @@ js/
   data/
     solData.js        the real solar system (compressed distances)
     solEpochs.js      complete 1 Ga / 5 Ma / present appearance snapshots
+    planetEpochRecipes.js pure registry for modeled non-Earth epoch surfaces
     ephemeris.js      JPL Keplerian elements + rates → true positions
     starCatalog.js    named stars, binaries, pulsar, Sgr A*, color helpers
     exoplanets.js     confirmed planets (NASA archive values, inlined)
@@ -180,6 +191,7 @@ tools/build-starcatalog.mjs  regenerates data/gen from HYG + d3-celestial
     noise.js          seeded 3D value noise + fBm for terrain
     textures.js       procedural planet/ring textures drawn at runtime
     earthEpochTextures.js  Rodinia + Pliocene equirectangular reconstructions
+    planetEpochTextures.js modeled Venus/Mars/giant-planet epoch textures
 ```
 
 Run the tests with `npm test` (plain `node --test`, no dependencies).

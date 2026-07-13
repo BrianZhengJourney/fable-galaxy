@@ -370,7 +370,7 @@ export class Hud {
     document.body.classList.remove('sol-epoch-visible');
     setInteractive(panel, false);
   }
-  setSolEpoch(epoch){
+  setSolEpoch(epoch, bodyName = null){
     if (!epoch) return;
     let active = null;
     for (const tab of document.querySelectorAll('#solEpochTabs .epoch-tab')){
@@ -380,14 +380,20 @@ export class Hud {
       tab.tabIndex = on ? 0 : -1;
       if (on) active = tab;
     }
+    const bodyEvidence = bodyName && epoch.bodyEvidence
+      ? epoch.bodyEvidence[bodyName] : null;
+    const copy = bodyEvidence || epoch;
     $('solEpochKind').textContent = epoch.phase || epoch.kind || '';
-    $('solEpochTitle').textContent = epoch.title;
-    $('solEpochText').textContent = epoch.text;
-    $('solEpochLegend').textContent = epoch.legend || '';
-    $('solEpochEvidence').textContent = [epoch.evidence, epoch.caveat].filter(Boolean).join(' ');
+    $('solEpochTitle').textContent = copy.title || epoch.title || '';
+    $('solEpochText').textContent = copy.text || epoch.text || '';
+    $('solEpochLegend').textContent = copy.legend || epoch.legend || '';
+    $('solEpochEvidence').textContent = [
+      copy.evidence || epoch.evidence,
+      bodyEvidence ? bodyEvidence.caveat : epoch.caveat,
+    ].filter(Boolean).join(' ');
     const source = $('solEpochSource');
-    source.href = epoch.source;
-    source.textContent = (epoch.sourceLabel || 'SOURCE') + ' ↗';
+    source.href = copy.source || epoch.source || '#';
+    source.textContent = (copy.sourceLabel || epoch.sourceLabel || 'SOURCE') + ' ↗';
     if (active) $('solEpochCopy').setAttribute('aria-labelledby', active.id);
   }
   setMode(mode){ document.body.dataset.mode = mode; }

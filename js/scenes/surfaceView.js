@@ -62,6 +62,7 @@ export class SurfaceView {
     this.scene.add(buildStarSphere('orbit:' + planet.name));
 
     this.spin = new THREE.Group();
+    this.spin.rotation.z = (planet.cfg.tilt || 0) * Math.PI / 180;
     this.scene.add(this.spin);
     this.realMat = null;
     this.atmoMat = null;
@@ -97,7 +98,7 @@ export class SurfaceView {
     this.realMat = mat;
     this.appearanceTarget = {
       name: planet.name, cfg: planet.cfg, mat, baseEmissive: 0,
-      fallbackMap: mat.map,
+      fallbackMap: mat.map, spin: this.spin,
     };
 
     // load the identical maps the orbital planet used (already in cache → instant)
