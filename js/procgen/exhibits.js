@@ -363,8 +363,9 @@ export function buildImagePlate(entry, url){
    photo for color. Head-on, the integral reproduces the photograph almost
    exactly (nothing is lost to point sampling); orbit and it is a true glowing
    gas volume whose dust genuinely occludes the stars behind it.
-   opts.depth = box thickness in world units. Falls back to a particle cloud
-   when WebGL2 (sampler3D) is unavailable. */
+   opts.depth = box thickness in world units; opts.stars = false lets a
+   dedicated wrapper own the reconstructed star layer. Falls back to a
+   particle cloud when WebGL2 (sampler3D) is unavailable. */
 /* per-landmark rendering tune: light = direction of the ionizing source in
    image space (x right, y up, z toward viewer), shade = shading strength,
    depthScale = how far the inferred depth spreads columns in z */
@@ -374,11 +375,26 @@ const VOLUME_TUNE = {
   'pillars-of-creation': { light: [0.22, 0.9, 0.37], shade: 0.75, depthScale: 1.35, density: 1.05 },
 };
 
+let _webgl2VolumeSupport = null;
+function supportsWebGL2Volume(){
+  if (_webgl2VolumeSupport != null) return _webgl2VolumeSupport;
+  try{
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('webgl2');
+    _webgl2VolumeSupport = !!context;
+    const lose = context && context.getExtension('WEBGL_lose_context');
+    if (lose) lose.loseContext();
+  }catch(_error){
+    _webgl2VolumeSupport = false;
+  }
+  return _webgl2VolumeSupport;
+}
+
 export function buildImageVolume(entry, url, opts = {}){
-  let gl2 = false;
-  try{ gl2 = !!document.createElement('canvas').getContext('webgl2'); }catch(e){ /* ignore */ }
-  if (!gl2) return buildParticlePhoto(entry, url, opts);
-  const tune = VOLUME_TUNE[entry.id] || {};
+  if (!supportsWebGL2Volume()) return buildParticlePhoto(entry, url, opts);
+  const tune = { ...(VOLUME_TUNE[entry.id] || {}), ...(opts.tune || {}) };
+  const lowQuality = opts.qualityTier === 'low';
+  const raySteps = lowQuality ? 56 : 96;
 
   const group = new THREE.Group();
   group.add(starDust('volbg:' + entry.id, 440, 240, 0x9fb0d0));
@@ -396,6 +412,9 @@ export function buildImageVolume(entry, url, opts = {}){
     uHalf:   { value: new THREE.Vector3(H/2, H/2, depthWorld/2) },
     uDensity:{ value: tune.density || 0.85 },
     uShade:  { value: tune.shade != null ? tune.shade : 0.5 },
+    // Dedicated photo-hybrid exhibits fade the inferred volume under their
+    // exact front-facing observation, then restore it as orbit reveals depth.
+    uPresentation: { value: 1 },
     uLightUvw:{ value: new THREE.Vector3(0, 0.05, 0.02) },  // set properly in build()
   };
   const mat = new THREE.ShaderMaterial({
@@ -419,6 +438,7 @@ export function buildImageVolume(entry, url, opts = {}){
       uniform vec3 uHalf;
       uniform float uDensity;
       uniform float uShade;
+      uniform float uPresentation;
       uniform vec3 uLightUvw;
       in vec3 vPos;
       out vec4 outColor;
@@ -442,7 +462,7 @@ export function buildImageVolume(entry, url, opts = {}){
         float tExit  = min(min(tmax.x, tmax.y), tmax.z);
         if (tExit <= tEnter){ outColor = vec4(0.0); return; }
 
-        const int STEPS = 96;
+        const int STEPS = ${raySteps};
         float dt = (tExit - tEnter) / float(STEPS);
         // per-pixel ray-start jitter: converts z-slice "wood-grain" banding
         // (visible edge-on) into imperceptible grain
@@ -493,7 +513,7 @@ export function buildImageVolume(entry, url, opts = {}){
         }
         acc = acc * (1.0 + acc * 0.28) / (1.0 + acc * 0.62); // gentle filmic shoulder
         acc = pow(clamp(acc, 0.0, 1.0), vec3(0.4545));       // manual linear → sRGB
-        outColor = vec4(acc, aAcc);                          // acc is already premultiplied
+        outColor = vec4(acc * uPresentation, aAcc * uPresentation);
       }`,
   });
   const box = new THREE.Mesh(new THREE.BoxGeometry(H, H, depthWorld), mat);
@@ -502,6 +522,7 @@ export function buildImageVolume(entry, url, opts = {}){
 
   const rnd = mulberry(hashStr('volstars:' + entry.id));
   let visStars = null, irStars = null, irTex = null, irTarget = 0;
+  let spatialReveal = 1;
   let volumeTex = null, visiblePlateTex = null;
   let depthImage = null, infraredImage = null;
   let disposed = false, built = false, materialDisposed = false;
@@ -555,7 +576,7 @@ export function buildImageVolume(entry, url, opts = {}){
     const img = tex.image;
     const iw = img.width || 16, ih = img.height || 9;
     const asp = iw / ih;
-    const pw = asp >= 1 ? H * asp : H, ph = asp >= 1 ? H : H / asp;
+    const pw = H * asp, ph = H;
     // real depth spreads structure across z, so give it a deeper box
     const DW = opts.depth != null ? opts.depth : (dimg ? 36 : depthWorld);
     box.geometry.dispose();
@@ -576,10 +597,10 @@ export function buildImageVolume(entry, url, opts = {}){
 
     // --- grow the density field from the photo (finer under a real depth map:
     // that's where silhouettes carry the exhibit) ---
-    const BASE = dimg ? 160 : 128;
+    const BASE = dimg ? (lowQuality ? 112 : 160) : (lowQuality ? 96 : 128);
     const SW = asp >= 1 ? BASE : Math.max(16, Math.round(BASE * asp));
     const SH = asp >= 1 ? Math.max(16, Math.round(BASE / asp)) : BASE;
-    const SD = dimg ? 56 : 48;
+    const SD = dimg ? (lowQuality ? 36 : 56) : (lowQuality ? 32 : 48);
     const sharp = imagePixels(img, SW, SH, 0);
     const soft  = imagePixels(img, SW, SH, 3);              // blurred → smooth thickness
     const dpt   = dimg ? imagePixels(dimg, SW, SH, 2) : null;  // inferred depth, brighter = closer
@@ -641,8 +662,10 @@ export function buildImageVolume(entry, url, opts = {}){
     uniforms.uImg2.value = imgTex;                          // placeholder until the IR plate lands
 
     // the photo's stars, reborn as points inside the cloud — they parallax
-    visStars = makeStarPoints(stars);
-    if (visStars) box.add(visStars);
+    if (opts.stars !== false){
+      visStars = makeStarPoints(stars);
+      if (visStars){ box.add(visStars); updateStarOpacity(); }
+    }
 
     box.visible = true;
 
@@ -662,8 +685,10 @@ export function buildImageVolume(entry, url, opts = {}){
         const irSharp = imagePixels(ii, SW, SH, 0);
         const irSoft  = imagePixels(ii, SW, SH, 3);
         const a = lumArrays(irSharp, irSoft, SW, SH);
-        irStars = makeStarPoints(extractStars(irSharp, a.lumA, a.blurA, SW, SH, pw, ph, starZ));
-        if (irStars){ irStars.material.opacity = 0; box.add(irStars); }
+        if (opts.stars !== false){
+          irStars = makeStarPoints(extractStars(irSharp, a.lumA, a.blurA, SW, SH, pw, ph, starZ));
+          if (irStars){ box.add(irStars); updateStarOpacity(); }
+        }
       };
       ii.onerror = () => {
         ii.onload = null; ii.onerror = null;
@@ -673,10 +698,16 @@ export function buildImageVolume(entry, url, opts = {}){
     }
   }
 
+  function updateStarOpacity(){
+    const reveal = 0.16 + spatialReveal * 0.84;
+    if (visStars) visStars.material.opacity = 0.95 * (1 - uniforms.uMix.value * 0.75) * reveal;
+    if (irStars) irStars.material.opacity = 0.95 * uniforms.uMix.value * reveal;
+  }
+
   let t = 0, yaw0 = null;
   const _v = new THREE.Vector3();
   return {
-    group, focusDist: 84, isImage: true,
+    group, content: box, uniforms, focusDist: 84, isImage: true,
     hasIR: !!landmarkImageIR(entry.id),
     dispose(){
       if (disposed) return;
@@ -687,6 +718,12 @@ export function buildImageVolume(entry, url, opts = {}){
       visStars = null; irStars = null;
     },
     setIR(on){ if (!disposed) irTarget = on ? 1 : 0; },
+    setSpatialReveal(value){
+      if (disposed) return;
+      spatialReveal = clamp01(value);
+      uniforms.uPresentation.value = spatialReveal;
+      updateStarOpacity();
+    },
     update(dt, camera){
       if (disposed) return;
       t += dt;
@@ -695,8 +732,7 @@ export function buildImageVolume(entry, url, opts = {}){
       if (mx !== irTarget){
         const step = Math.min(Math.abs(irTarget - mx), dt * 0.8);
         uniforms.uMix.value = mx + Math.sign(irTarget - mx) * step;
-        if (visStars) visStars.material.opacity = 0.95 * (1 - uniforms.uMix.value * 0.75);
-        if (irStars)  irStars.material.opacity  = 0.95 * uniforms.uMix.value;
+        updateStarOpacity();
       }
       if (camera){
         if (yaw0 === null)                                   // face the viewer once, head-on photo first
@@ -806,6 +842,7 @@ function buildParticlePhoto(entry, url, opts = {}){
 
   // soft backlight so the cloud reads as lit while it streams in
   const back = glowSprite('rgba(120,170,255,.10)', 'rgba(70,120,210,.03)', 256, 120);
+  back.material.userData.baseOpacity = back.material.opacity;
   back.position.z = -46; cloud.add(back);
 
   const rnd = mulberry(hashStr('vol:' + entry.id));
@@ -814,6 +851,19 @@ function buildParticlePhoto(entry, url, opts = {}){
   const depth = opts.depth != null ? opts.depth : 30;
   const invert = opts.invert ? 1 : 0;
   let disposed = false;
+  let spatialReveal = 1;
+
+  function applySpatialReveal(){
+    cloud.visible = spatialReveal > .002;
+    cloud.traverse(object => {
+      const materials = Array.isArray(object.material)
+        ? object.material : object.material ? [object.material] : [];
+      for (const material of materials){
+        const base = material.userData && material.userData.baseOpacity;
+        if (Number.isFinite(base)) material.opacity = base*spatialReveal;
+      }
+    });
+  }
 
   loadTexture(url, tex => {
     if (disposed) return;
@@ -827,7 +877,7 @@ function buildParticlePhoto(entry, url, opts = {}){
     const data = g.getImageData(0, 0, cw, ch).data;
 
     const asp = iw / ih;
-    const pw = asp >= 1 ? H * asp : H, ph = asp >= 1 ? H : H / asp;
+    const pw = H*asp, ph = H;
     const cellX = pw / cw, cellY = ph / ch;
 
     const pos = [], col = [];
@@ -863,16 +913,24 @@ function buildParticlePhoto(entry, url, opts = {}){
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3));
-    cloud.add(new THREE.Points(geo, new THREE.PointsMaterial({
+    const material = new THREE.PointsMaterial({
       size: 1.5, vertexColors: true, transparent: true, opacity: 0.72,
       map: dotTexture(), alphaTest: 0.02, sizeAttenuation: true,
-      blending: THREE.AdditiveBlending, depthWrite: false })));
+      blending: THREE.AdditiveBlending, depthWrite: false });
+    material.userData.baseOpacity = material.opacity;
+    cloud.add(new THREE.Points(geo, material));
+    applySpatialReveal();
   });
 
   let t = 0;
   return {
-    group, focusDist: 84, isImage: true,
+    group, content: cloud, focusDist: 84, isImage: true,
     dispose(){ disposed = true; },
+    setSpatialReveal(value){
+      if (disposed) return;
+      spatialReveal = clamp01(value);
+      applySpatialReveal();
+    },
     update(dt){
       if (disposed) return;
       t += dt;

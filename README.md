@@ -34,13 +34,24 @@ Keep that terminal running. Use a second terminal for the automated checks:
 npm test
 ```
 
-The five dedicated field exhibits have direct preview URLs:
+The five timeline-driven field exhibits have direct preview URLs:
 
 - `http://127.0.0.1:8741/#/landmark/pillars-of-creation`
 - `http://127.0.0.1:8741/#/landmark/carina-nebula`
 - `http://127.0.0.1:8741/#/landmark/crab-nebula`
 - `http://127.0.0.1:8741/#/landmark/m87-black-hole-image`
 - `http://127.0.0.1:8741/#/landmark/pale-blue-dot`
+
+Nine more nebulae use dedicated photo-hybrid 3D profiles: Orion, Horsehead,
+Ring, Helix, Lagoon, Cat's Eye, Veil, Rosette, and Trifid. Each starts as the
+source observation, then reveals colored, photo-aligned stars, inferred depth,
+and a science-led morphology scaffold as you orbit. Preview any one with
+`http://127.0.0.1:8741/#/landmark/<id>`; for example:
+
+- `http://127.0.0.1:8741/#/landmark/orion-nebula`
+- `http://127.0.0.1:8741/#/landmark/horsehead-nebula`
+- `http://127.0.0.1:8741/#/landmark/ring-nebula`
+- `http://127.0.0.1:8741/#/landmark/veil-nebula`
 
 Solar System appearance checkpoints:
 

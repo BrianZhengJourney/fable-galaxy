@@ -1,13 +1,14 @@
 # Cosmic Landmark image credits
 
-Real photographs shown on the landmark exhibit plates. Sources use NASA media
-terms or Creative Commons licenses. Per-image credit strings live in
-`js/data/landmarkImages.js` and render on each landmark's card.
+Real photographs shown on the landmark exhibit plates. Sources use NASA/ESA
+media terms, Creative Commons, or source-specific survey terms. Per-image
+credit strings live in `js/data/landmarkImages.js` and render on each
+landmark's card.
 
 Primary sources & licenses:
 
 - **NASA / ESA — Hubble Space Telescope** (public domain): Orion, Ring, Helix,
-  Cat's Eye, Trifid, Crab, SN 1987A, Veil, Whirlpool (M51),
+  Cat's Eye, Crab, SN 1987A, Veil, Whirlpool (M51),
   Sombrero (M104), Hubble Ultra-Deep Field, Shoemaker-Levy 9 impact scars.
 - **ESA/Webb aligned Hubble↔Webb pair** (CC BY 4.0, esawebb.org weic2216e/f):
   Pillars of Creation visible (`pillars-of-creation.jpg`, Hubble) and
@@ -110,7 +111,13 @@ Primary sources & licenses:
 - **ESO / VISTA** (CC BY 4.0): Lagoon, Large & Small Magellanic Clouds,
   Halley's Comet.
 - **ESA / Planck Collaboration** (CC BY 4.0): Cosmic Microwave Background.
-- **ESA/Hubble** (CC BY 4.0): Rosette Nebula.
+- **NASA/ESA, the DSS-II and GSC-II Consortia**: full-field Rosette Nebula
+  (`opo0118c`), with images from the 'Palomar Observatory-STScI Digital Sky
+  Survey of the northern sky, based on scans of the Second Palomar Sky Survey
+  are copyright ) 1993-1999 by the California Institute of Technology). Source:
+  <https://esahubble.org/images/opo0118c/>.
+- **ESO** (CC BY 4.0): clean full-field Trifid Nebula (`eso0930b`). Source:
+  <https://www.eso.org/public/images/eso0930b/>.
 - **Adam Evans** (CC BY 2.0): Andromeda Galaxy (M31).
 - **Ken Crawford** (CC BY-SA 3.0): Horsehead Nebula.
 - **Bernd Thaller** (CC BY 2.0): 2017 total solar eclipse.

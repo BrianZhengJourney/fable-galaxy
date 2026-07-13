@@ -20,6 +20,13 @@ import {
 } from '../js/data/solEpochs.js';
 import { SUPPORTED_PLANET_EPOCH_SURFACES } from '../js/data/planetEpochRecipes.js';
 import { parseAtlasHash } from '../js/core/route.js';
+import {
+  NEBULA_PROFILES,
+  NEBULA_PROFILE_IDS,
+  nebulaProfile,
+} from '../js/data/nebulaProfiles.js';
+import { LANDMARK_IMAGES } from '../js/data/landmarkImages.js';
+import { LANDMARK_DEPTH } from '../js/data/landmarkDepth.js';
 
 const rec = name => STAR_CATALOG.find(r => r.name === name);
 
@@ -225,6 +232,7 @@ import {
   FEATURED_LANDMARK_IDS,
   LANDMARK_EXPERIENCES,
   BODY_EXPERIENCES,
+  landmarkExperience,
 } from '../js/data/fieldStories.js';
 
 test('the generated star catalog is well-formed', () => {
@@ -371,6 +379,41 @@ test('every featured landmark resolves to a curated catalog entry', () => {
     assert.ok(catalogIds.has(id), id + ': missing catalog entry');
     assert.ok(LANDMARK_EXPERIENCES[id], id + ': missing experience');
   }
+});
+
+test('the upgraded nebula collection has complete science-led 3D profiles', () => {
+  const catalogIds = new Set(LANDMARKS.map(entry => entry.id));
+  const expected = [
+    'orion-nebula', 'horsehead-nebula', 'ring-nebula', 'helix-nebula',
+    'lagoon-nebula', 'cats-eye-nebula', 'veil-nebula', 'rosette-nebula',
+    'trifid-nebula',
+  ];
+  assert.deepEqual([...NEBULA_PROFILE_IDS].sort(), expected.sort());
+  assert.equal(new Set(NEBULA_PROFILE_IDS).size, 9);
+
+  for (const id of NEBULA_PROFILE_IDS){
+    const profile = nebulaProfile(id);
+    assert.equal(profile, NEBULA_PROFILES[id]);
+    assert.ok(catalogIds.has(id), id + ': missing catalog entry');
+    assert.ok(LANDMARK_IMAGES[id]?.file, id + ': missing observation');
+    assert.ok(LANDMARK_DEPTH[id], id + ': missing aligned depth map');
+    assert.ok(profile.family && profile.camera && profile.volume, id + ': incomplete shape');
+    assert.ok(Math.abs(profile.camera.startPhi-Math.PI/2) < 0.001,
+      id + ': observation must start head-on');
+    assert.ok(profile.palette && profile.structure, id + ': incomplete visual recipe');
+    assert.ok(Array.isArray(profile.sources), id + ': sources must be an array');
+    assert.match(profile.source, /^https:\/\//, id + ': invalid morphology source');
+    assert.ok(profile.caveat.length > 40, id + ': missing uncertainty caveat');
+  }
+  assert.equal(nebulaProfile('pillars-of-creation'), null);
+});
+
+test('the SN 1054 Crab alias opens the dedicated historical state', () => {
+  const entry = LANDMARKS.find(landmark => landmark.id === 'crab-nebula-sn-1054');
+  const story = landmarkExperience(entry);
+  assert.equal(story.defaultMoment, 'crab-1054');
+  const moment = story.moments.find(candidate => candidate.id === story.defaultMoment);
+  assert.equal(moment.visual.state, 'crab.supernova-flash');
 });
 
 test('curated field stories have complete, selectable milestones', () => {

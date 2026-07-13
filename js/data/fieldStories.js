@@ -661,8 +661,13 @@ export const BODY_EXPERIENCES = {
 };
 
 export function landmarkExperience(entry){
-  const curated = entry && LANDMARK_EXPERIENCES[entry.id];
-  if (curated) return curated;
+  const alias1054 = entry && entry.id === 'crab-nebula-sn-1054';
+  const curated = entry && LANDMARK_EXPERIENCES[
+    alias1054 ? 'crab-nebula' : entry.id
+  ];
+  if (curated) return alias1054
+    ? { ...curated, defaultMoment: 'crab-1054' }
+    : curated;
   return {
     summary: entry.subtitle || entry.famousFor || 'A field note from the cosmic archive.',
     defaultMoment: 'archive-observation',
