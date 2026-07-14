@@ -33,8 +33,15 @@ export const CARINA_STATES = Object.freeze({
 const BUDGET = Object.freeze(TEX_TIER === 'low' ? {
   photoLongSide: 176,
   alignedStars: 260,
-  formationShellPoints: 3600,
-  sphereSegments: 24,
+  formationCliffColumns: 84,
+  formationCliffRows: 38,
+  formationPillarRadial: 30,
+  formationPillarRings: 28,
+  formationDustKnots: 220,
+  formationFilaments: 11,
+  homunculusRadial: 34,
+  homunculusRings: 28,
+  homunculusDustKnots: 150,
   reliefTriangles: 6200,
   dustTriangles: 1700,
   futureTriangles: 4100,
@@ -42,8 +49,15 @@ const BUDGET = Object.freeze(TEX_TIER === 'low' ? {
 } : {
   photoLongSide: 320,
   alignedStars: 720,
-  formationShellPoints: 9200,
-  sphereSegments: 40,
+  formationCliffColumns: 168,
+  formationCliffRows: 72,
+  formationPillarRadial: 52,
+  formationPillarRings: 48,
+  formationDustKnots: 620,
+  formationFilaments: 24,
+  homunculusRadial: 58,
+  homunculusRings: 46,
+  homunculusDustKnots: 340,
   reliefTriangles: 19000,
   dustTriangles: 4800,
   futureTriangles: 12200,
@@ -54,7 +68,37 @@ const PHOTO_WIDTH = 108;
 const WEBB_ASPECT = 11264 / 3904;
 const HUBBLE_ASPECT = 4000 / 1937;
 const HALF_PI = Math.PI / 2;
-const MODEL_CREDIT = 'Hubble panorama: NASA, ESA, N. Smith and the Hubble Heritage Team · CC BY 4.0 · Eta UV: NASA, ESA, N. Smith and J. Morse · 3D Homunculus model: Steffen, Teodoro, Madura et al. (2014)';
+const CARINA_PRESENTATION_CREDITS = Object.freeze({
+  [CARINA_STATES.FORMATION]: Object.freeze({
+    label: 'MODEL',
+    text: 'Procedural scientific 3D reconstruction · molecular-cliff depth, cavity layout, star placement and fine structure are interpretive',
+  }),
+  [CARINA_STATES.LOCATOR]: Object.freeze({
+    label: 'SCHEMATIC',
+    text: 'Modern schematic locator · not Lacaille’s original 1752 view',
+  }),
+  [CARINA_STATES.ETA_ERUPTION]: Object.freeze({
+    label: 'OBSERVATION + MODEL',
+    text: '3D Homunculus shape model: Steffen, Teodoro, Madura et al. (2014) · Hubble UV (March/July 2018): NASA, ESA, N. Smith and J. Morse',
+  }),
+  [CARINA_STATES.HUBBLE]: Object.freeze({
+    label: 'OBSERVATION + MODEL',
+    text: 'Hubble 2007 Carina mosaic: NASA, ESA, N. Smith and the Hubble Heritage Team (STScI/AURA) · CC BY 4.0 · off-axis depth is interpretive',
+  }),
+  [CARINA_STATES.WEBB]: Object.freeze({
+    label: 'OBSERVATION + MODEL',
+    text: 'Webb Cosmic Cliffs NIRCam + MIRI: NASA, ESA, CSA, STScI · CC BY 4.0 · off-axis depth is interpretive',
+  }),
+  [CARINA_STATES.FUTURE]: Object.freeze({
+    label: 'MODEL',
+    text: 'Illustrative future-erosion model derived from the Webb Cosmic Cliffs source/depth structure · no fixed prediction date',
+  }),
+});
+const CARINA_OBSERVATION_STATES = new Set([
+  CARINA_STATES.ETA_ERUPTION,
+  CARINA_STATES.HUBBLE,
+  CARINA_STATES.WEBB,
+]);
 
 const WEBB_RELIEF_PROFILE = Object.freeze({
   volume: Object.freeze({ depth: 34, depthScale: 1 }),
@@ -268,68 +312,503 @@ function setCaptionOpacity(caption, opacity){
   caption.visible = opacity > .01;
 }
 
-function makeCorrugatedFeedbackShell(seed, count, { spread, palette, thickness, opacity }){
-  const latitudeSegments = Math.max(18, Math.round(Math.sqrt(count)*.48));
-  const longitudeSegments = Math.max(32, Math.round(latitudeSegments*1.85));
-  const positions = [];
-  const colors = [];
-  const indices = [];
-  const tones = palette.map(value => new THREE.Color(value));
-  const phase = (hashStr(seed)%997)*.001;
-  for (let latitude = 0; latitude <= latitudeSegments; latitude++){
-    const vertical = latitude/latitudeSegments*2-1;
-    const radial = Math.sqrt(Math.max(0, 1-vertical*vertical));
-    for (let longitude = 0; longitude <= longitudeSegments; longitude++){
-      const angle = longitude/longitudeSegments*Math.PI*2;
-      const ripple = Math.sin(angle*5+vertical*7.2+phase)*.055
-        + Math.sin(angle*13-vertical*11.0)*.026
-        + Math.sin(angle*23+vertical*17.0)*thickness*.16;
-      const corrugation = 1+ripple;
-      positions.push(
-        Math.cos(angle)*radial*spread[0]*corrugation,
-        vertical*spread[1]*corrugation,
-        Math.sin(angle)*radial*spread[2]*corrugation,
-      );
-      const band = Math.floor((angle/(Math.PI*2))*tones.length+(vertical+.5)*1.7);
-      const tone = tones[((band%tones.length)+tones.length)%tones.length];
-      const brightness = .58+.28*(.5+.5*Math.sin(angle*7+vertical*9));
-      colors.push(tone.r*brightness,tone.g*brightness,tone.b*brightness);
+const DUST_SHADOW = new THREE.Color(0x160c14);
+const DUST_TEAL = new THREE.Color(0x174857);
+const DUST_MID = new THREE.Color(0x54253c);
+const DUST_MAGENTA = new THREE.Color(0x8b3164);
+const DUST_WARM = new THREE.Color(0xb95d48);
+const IONIZED_BLUE = new THREE.Color(0x239eb7);
+const IONIZED_GOLD = new THREE.Color(0xd8783d);
+const IONIZED_MAGENTA = new THREE.Color(0xb83979);
+const FORMATION_CAVITIES = Object.freeze([
+  Object.freeze({ x: -43, v: .54, rx: 5.3, ry: .11 }),
+  Object.freeze({ x: -27, v: .36, rx: 4.8, ry: .10 }),
+  Object.freeze({ x: -3, v: .61, rx: 6.4, ry: .15 }),
+  Object.freeze({ x: 21, v: .43, rx: 5.5, ry: .12 }),
+  Object.freeze({ x: 40, v: .69, rx: 4.1, ry: .12 }),
+]);
+
+function fract(value){ return value-Math.floor(value); }
+
+function noiseCell(x, y, phase){
+  return fract(Math.sin(x*127.1+y*311.7+phase*73.13)*43758.5453123);
+}
+
+function valueNoise(x, y, phase = 0){
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x-ix, fy = y-iy;
+  const sx = fx*fx*(3-2*fx), sy = fy*fy*(3-2*fy);
+  const a = noiseCell(ix,iy,phase), b = noiseCell(ix+1,iy,phase);
+  const c = noiseCell(ix,iy+1,phase), d = noiseCell(ix+1,iy+1,phase);
+  return THREE.MathUtils.lerp(THREE.MathUtils.lerp(a,b,sx),
+    THREE.MathUtils.lerp(c,d,sx),sy);
+}
+
+function cliffFbm(x, y, phase = 0){
+  return valueNoise(x,y,phase)*.52
+    +valueNoise(x*2.03,y*2.07,phase+1.7)*.29
+    +valueNoise(x*4.11,y*4.03,phase+4.1)*.19;
+}
+
+function formationCliffHeight(x){
+  let height = -12
+    + Math.sin(x*.092+1.4)*3.4
+    + Math.sin(x*.225-2.1)*1.9
+    + Math.sin(x*.47+.7)*.72
+    +(cliffFbm(x*.11,2.7,3.2)-.5)*5.2;
+  const peaks = [
+    [-34,15,7.2],[-12,24,8.5],[10,12,6.4],[31,19,7.1],[45,9,5.2],
+  ];
+  for (const [center,lift,width] of peaks){
+    const distance = (x-center)/width;
+    height += lift*Math.exp(-distance*distance);
+  }
+  return height;
+}
+
+function cliffSurfaceZ(x, vertical, back = false){
+  const broad = (cliffFbm(x*.052,vertical*3.4,8.1)-.5)*8.6;
+  const crags = (cliffFbm(x*.19,vertical*11.8,12.4)-.5)*3.2;
+  const strata = Math.sin(x*.23+vertical*31.0)*.74
+    +Math.sin(x*.69-vertical*52.0)*.28;
+  const ridge = Math.pow(1-Math.abs(valueNoise(x*.14,vertical*9.3,17.2)*2-1),4)*2.2;
+  const overhang = smoothstep(.72,1,vertical)*(2.4+2.2*valueNoise(x*.1,4.2,6.9));
+  const undercut = Math.pow(1-vertical,1.45)*3.6;
+  return back ? -15.8+broad*.13+crags*.08
+    : .4+broad+crags+strata+ridge+overhang-undercut;
+}
+
+function dustColor(vertical, x, z, back = false){
+  const ridge = cliffFbm(x*.15,vertical*10.4,5.7);
+  const strata = .5+.5*Math.sin(x*.28+z*.54+vertical*43.0);
+  const lit = clamp01(.08+smoothstep(.06,.96,vertical)*(.48+.34*ridge)+strata*.16);
+  const color = DUST_SHADOW.clone().lerp(DUST_TEAL,.18+.24*(1-ridge));
+  color.lerp(DUST_MID,.16+lit*.42);
+  color.lerp(DUST_MAGENTA,.22+.30*(.5+.5*Math.sin(x*.08+vertical*8.0)));
+  color.lerp(DUST_WARM,Math.pow(lit,2.2)*.46);
+  color.multiplyScalar(.62+.46*strata);
+  const exposedCrest = smoothstep(.84,1,vertical);
+  color.lerp(DUST_MAGENTA,exposedCrest*.34);
+  color.lerp(DUST_WARM,exposedCrest*.12);
+  color.multiplyScalar(1-exposedCrest*.30);
+  if (back) color.multiplyScalar(.42);
+  return color;
+}
+
+function insideFormationCavity(x, vertical, inset = 1){
+  return FORMATION_CAVITIES.some(cavity => {
+    const dx = (x-cavity.x)/(cavity.rx*inset);
+    const dy = (vertical-cavity.v)/(cavity.ry*inset);
+    return dx*dx+dy*dy < 1;
+  });
+}
+
+function makeSculptedDustCliff(){
+  const columns = BUDGET.formationCliffColumns;
+  const rows = BUDGET.formationCliffRows;
+  const positions = [], colors = [], indices = [];
+  const stride = rows+1;
+  const bottom = -39;
+  for (let side = 0; side < 2; side++){
+    for (let column = 0; column <= columns; column++){
+      const x = -52+column/columns*104;
+      const top = formationCliffHeight(x);
+      for (let row = 0; row <= rows; row++){
+        const vertical = row/rows;
+        const edgeFade = Math.sin(Math.PI*vertical);
+        const px = x+(cliffFbm(x*.16,vertical*8.2,21.1)-.5)*2.15*edgeFade;
+        const y = THREE.MathUtils.lerp(bottom,top,vertical)
+          +(cliffFbm(x*.23,vertical*13.4,25.2)-.5)*1.15*edgeFade;
+        const z = cliffSurfaceZ(x,vertical,side === 1);
+        positions.push(px,y,z);
+        const color = dustColor(vertical,px,z,side === 1);
+        colors.push(color.r,color.g,color.b);
+      }
     }
   }
-  const row = longitudeSegments+1;
-  for (let latitude = 0; latitude < latitudeSegments; latitude++){
-    const vertical = (latitude+.5)/latitudeSegments*2-1;
-    for (let longitude = 0; longitude < longitudeSegments; longitude++){
-      const angle = (longitude+.5)/longitudeSegments*Math.PI*2;
-      // An H II cavity is an opened, torn wall rather than a sealed bubble.
-      // Remove a broad observer-facing mouth and deterministic smaller gaps.
-      const frontMouth = Math.sin(angle)>.48 && Math.abs(vertical)<.72;
-      const torn = Math.sin(angle*11+vertical*19)+Math.cos(angle*5-vertical*13)<-1.22;
-      if (frontMouth || torn) continue;
-      const a = latitude*row+longitude;
-      const b = a+1, c = a+row, d = c+1;
-      indices.push(a,c,b,b,c,d);
+  const sideOffset = (columns+1)*stride;
+  for (let column = 0; column < columns; column++){
+    for (let row = 0; row < rows; row++){
+      const a = column*stride+row;
+      const b = a+stride, c = a+1, d = b+1;
+      const centerX = -52+(column+.5)/columns*104;
+      const centerV = (row+.5)/rows;
+      if (!insideFormationCavity(centerX,centerV,.96))
+        indices.push(a,b,c,c,b,d);
+      const ba = sideOffset+a, bb = sideOffset+b, bc = sideOffset+c, bd = sideOffset+d;
+      indices.push(ba,bc,bb,bc,bd,bb);
+    }
+    const frontTop = column*stride+rows;
+    const nextFrontTop = frontTop+stride;
+    const backTop = sideOffset+frontTop;
+    const nextBackTop = backTop+stride;
+    indices.push(frontTop,nextBackTop,backTop,frontTop,nextFrontTop,nextBackTop);
+    const frontBottom = column*stride;
+    const nextFrontBottom = frontBottom+stride;
+    const backBottom = sideOffset+frontBottom;
+    const nextBackBottom = backBottom+stride;
+    indices.push(frontBottom,backBottom,nextBackBottom,frontBottom,nextBackBottom,nextFrontBottom);
+  }
+  for (const column of [0,columns]){
+    for (let row = 0; row < rows; row++){
+      const front = column*stride+row;
+      const next = front+1;
+      const back = sideOffset+front;
+      const backNext = back+1;
+      if (column === 0) indices.push(front,next,back,back,next,backNext);
+      else indices.push(front,back,next,back,next,backNext);
     }
   }
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors,3));
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
+  geometry.userData.scientificRole = 'sculpted-molecular-cloud-cliff';
+  const material = new THREE.MeshStandardMaterial({
+    name: 'Carina.FormationDustCliffMaterial',
+    vertexColors: true,
+    roughness: .91,
+    metalness: 0,
+    emissive: 0x13080a,
+    emissiveIntensity: .48,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry,material);
+  mesh.name = 'sculpted-molecular-dust-cliff';
+  mesh.renderOrder = 2;
+  return mesh;
+}
+
+function makeIonizedCliffCrest(){
+  const columns = BUDGET.formationCliffColumns;
+  const positions = [], colors = [], indices = [];
+  for (let column = 0; column < columns; column++){
+    const x0 = -52+column/columns*104;
+    const x1 = -52+(column+1)/columns*104;
+    const energy = cliffFbm(column*.19,3.8,31.2);
+    const broken = energy < .43 || Math.sin(column*.74)+Math.sin(column*.19+2.2) < -.82;
+    if (broken) continue;
+    const thickness = .0035+.009*energy;
+    const base = positions.length/3;
+    for (const x of [x0,x1]){
+      const top = formationCliffHeight(x);
+      for (const vertical of [1,1-thickness]){
+        const edgeFade = Math.sin(Math.PI*vertical);
+        const px = x+(cliffFbm(x*.16,vertical*8.2,21.1)-.5)*2.15*edgeFade;
+        const y = THREE.MathUtils.lerp(-39,top,vertical)+.16;
+        const z = cliffSurfaceZ(x,vertical,false)+.38;
+        positions.push(px,y,z);
+        let color;
+        const palette = fract(column*.173+energy*.61);
+        if (palette < .34) color = IONIZED_BLUE.clone().lerp(IONIZED_MAGENTA,palette/.34*.46);
+        else if (palette < .69) color = IONIZED_MAGENTA.clone().lerp(IONIZED_GOLD,(palette-.34)/.35);
+        else color = IONIZED_GOLD.clone().lerp(IONIZED_BLUE,(palette-.69)/.31*.55);
+        color.multiplyScalar(.38+.24*energy);
+        colors.push(color.r,color.g,color.b);
+      }
+    }
+    indices.push(base,base+2,base+1,base+1,base+2,base+3);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
   const material = new THREE.MeshBasicMaterial({
+    name: 'Carina.PhotoevaporationFrontMaterial',
     vertexColors: true,
     transparent: true,
-    opacity: opacity*.72,
+    opacity: .34,
     blending: THREE.NormalBlending,
     depthWrite: false,
-    depthTest: true,
     side: THREE.DoubleSide,
     toneMapped: false,
   });
-  const shell = new THREE.Mesh(geometry,material);
-  shell.name = 'broken-corrugated-feedback-cavity-wall';
-  return shell;
+  const mesh = new THREE.Mesh(geometry,material);
+  mesh.name = 'filled-photoevaporation-front';
+  mesh.renderOrder = 5;
+  return mesh;
+}
+
+function makeFormationCavityRims(){
+  const angular = TEX_TIER === 'low' ? 28 : 48;
+  const positions = [], colors = [], indices = [];
+  for (let cavityIndex = 0; cavityIndex < FORMATION_CAVITIES.length; cavityIndex++){
+    const cavity = FORMATION_CAVITIES[cavityIndex];
+    const base = positions.length/3;
+    for (let segment = 0; segment <= angular; segment++){
+      const angle = segment/angular*Math.PI*2;
+      for (let edge = 0; edge < 2; edge++){
+        const expand = edge ? .91 : 1.18;
+        const x = cavity.x+Math.cos(angle)*cavity.rx*expand;
+        const vertical = cavity.v+Math.sin(angle)*cavity.ry*expand;
+        const top = formationCliffHeight(x);
+        const y = THREE.MathUtils.lerp(-39,top,vertical);
+        const z = cliffSurfaceZ(x,vertical,false)+(edge ? -1.15 : .18);
+        positions.push(x,y,z);
+        const lightSide = smoothstep(-.6,.9,Math.sin(angle+.72));
+        const color = DUST_SHADOW.clone().lerp(
+          cavityIndex%3 === 0 ? IONIZED_BLUE
+            : cavityIndex%3 === 1 ? IONIZED_MAGENTA : IONIZED_GOLD,
+          (edge ? .12 : .28)*lightSide);
+        color.lerp(DUST_WARM,.12*(1-lightSide));
+        colors.push(color.r,color.g,color.b);
+      }
+    }
+    for (let segment = 0; segment < angular; segment++){
+      const a = base+segment*2, b = a+2;
+      indices.push(a,b,a+1,a+1,b,b+1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.userData.scientificRole = 'eroded-overhang-and-cavity-linings';
+  const material = new THREE.MeshStandardMaterial({
+    name: 'Carina.FormationCavityRimMaterial',
+    vertexColors: true,
+    emissive: 0x16080d,
+    emissiveIntensity: .62,
+    roughness: .93,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  const rims = new THREE.Mesh(geometry,material);
+  rims.name = 'recessed-eroded-cavity-overhangs';
+  rims.renderOrder = 4;
+  return rims;
+}
+
+function makeFormationDustKnots(scope){
+  const geometry = new THREE.IcosahedronGeometry(1,0);
+  geometry.userData.scientificRole = 'dense-molecular-knot-prototype';
+  const material = new THREE.MeshStandardMaterial({
+    name: 'Carina.FormationDustKnotMaterial',
+    color: 0xffffff,
+    emissive: 0x18080b,
+    emissiveIntensity: .54,
+    roughness: .97,
+    metalness: 0,
+  });
+  const knots = scope.own(
+    new THREE.InstancedMesh(geometry,material,BUDGET.formationDustKnots));
+  knots.name = 'dense-molecular-cliff-knots';
+  knots.userData.instanceRole = 'mesh-based-molecular-knot-detail';
+  const rnd = mulberry(hashStr('carina:formation:cliff-knots'));
+  const dummy = new THREE.Object3D();
+  let written = 0;
+  for (let attempts = 0; written < BUDGET.formationDustKnots && attempts < BUDGET.formationDustKnots*4; attempts++){
+    const x = -50+rnd()*100;
+    const vertical = .08+Math.pow(rnd(),.72)*.91;
+    if (insideFormationCavity(x,vertical,1.12)) continue;
+    const top = formationCliffHeight(x);
+    const y = THREE.MathUtils.lerp(-39,top,vertical)
+      +(cliffFbm(x*.23,vertical*13.4,25.2)-.5)*1.15*Math.sin(Math.PI*vertical);
+    const z = cliffSurfaceZ(x,vertical,false)+.2+rnd()*.52;
+    dummy.position.set(x,y,z);
+    dummy.rotation.set(rnd()*Math.PI,rnd()*Math.PI,rnd()*Math.PI);
+    const scale = .12+Math.pow(rnd(),2.35)*.78;
+    dummy.scale.set(scale*(.55+rnd()*.95),scale*(.28+rnd()*.72),scale*(.30+rnd()*.64));
+    dummy.updateMatrix();
+    knots.setMatrixAt(written,dummy.matrix);
+    const palette = rnd();
+    const color = palette < .18 ? DUST_TEAL.clone()
+      : palette < .34 ? DUST_MAGENTA.clone()
+      : palette < .88 ? DUST_MID.clone() : DUST_WARM.clone();
+    knots.setColorAt(written,color.multiplyScalar(.72+rnd()*.44));
+    written++;
+  }
+  knots.count = written;
+  knots.instanceMatrix.needsUpdate = true;
+  if (knots.instanceColor) knots.instanceColor.needsUpdate = true;
+  knots.renderOrder = 5;
+  return knots;
+}
+
+function makeFormationFilaments(){
+  const rnd = mulberry(hashStr('carina:formation:surface-filaments'));
+  const positions = [], colors = [], indices = [];
+  const segments = TEX_TIER === 'low' ? 10 : 18;
+  for (let filament = 0; filament < BUDGET.formationFilaments; filament++){
+    const startX = -48+rnd()*96;
+    const startV = .13+rnd()*.54;
+    const extent = .14+rnd()*.30;
+    const drift = gaussian(rnd)*9.5;
+    const width = .09+rnd()*.24;
+    const base = positions.length/3;
+    const tone = filament%3 === 0 ? IONIZED_BLUE
+      : filament%3 === 1 ? IONIZED_MAGENTA : IONIZED_GOLD;
+    for (let segment = 0; segment <= segments; segment++){
+      const t = segment/segments;
+      const vertical = clamp01(startV+t*extent);
+      const x = startX+drift*t+Math.sin(t*Math.PI*3+filament)*1.2*(1-t);
+      const top = formationCliffHeight(x);
+      const y = THREE.MathUtils.lerp(-39,top,vertical);
+      const z = cliffSurfaceZ(x,vertical,false)+.52;
+      const tangentX = width*(.35+.65*Math.sin(Math.PI*t));
+      for (const side of [-1,1]){
+        positions.push(x+side*tangentX,y,z+side*.035);
+        const color = tone.clone().multiplyScalar((.34+.38*Math.sin(Math.PI*t))*(.78+rnd()*.22));
+        colors.push(color.r,color.g,color.b);
+      }
+    }
+    for (let segment = 0; segment < segments; segment++){
+      const a = base+segment*2, b = a+2;
+      indices.push(a,b,a+1,a+1,b,b+1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.userData.scientificRole = 'irradiated-surface-filament-ribbons';
+  const material = new THREE.MeshBasicMaterial({
+    name: 'Carina.FormationFilamentMaterial',
+    vertexColors: true,
+    transparent: true,
+    opacity: .62,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  const filaments = new THREE.Mesh(geometry,material);
+  filaments.name = 'filled-irradiated-filament-ribbons';
+  filaments.renderOrder = 6;
+  return filaments;
+}
+
+function pillarRadius(t, baseRadius, phase, angle){
+  const taper = THREE.MathUtils.lerp(baseRadius,baseRadius*.22,Math.pow(t,.82));
+  const crown = baseRadius*.30*Math.exp(-Math.pow((t-.83)/.15,2));
+  const scallop = 1+.075*Math.sin(angle*5+t*12+phase)
+    +.035*Math.sin(angle*11-t*21-phase*.6);
+  return (taper+crown)*scallop;
+}
+
+function makeErodedDustPillar(seed, { x, y, z, height, radius, lean = 1 }){
+  const radial = BUDGET.formationPillarRadial;
+  const rings = BUDGET.formationPillarRings;
+  const phase = (hashStr(seed)%1009)/1009*Math.PI*2;
+  const positions = [], colors = [], indices = [];
+  for (let ring = 0; ring <= rings; ring++){
+    const t = ring/rings;
+    const centerX = x+Math.sin(t*Math.PI*.82+phase)*lean*t;
+    const centerZ = z+Math.cos(t*Math.PI*.73+phase)*lean*.46*t;
+    for (let segment = 0; segment <= radial; segment++){
+      const angle = segment/radial*Math.PI*2;
+      const r = pillarRadius(t,radius,phase,angle);
+      const verticalRipple = Math.sin(t*28+angle*3+phase)*.16;
+      const px = centerX+Math.cos(angle)*r;
+      const py = y+t*height+verticalRipple;
+      const pz = centerZ+Math.sin(angle)*r*.82;
+      positions.push(px,py,pz);
+      const lit = clamp01(.18+t*.72+.13*Math.cos(angle-.65));
+      const color = DUST_SHADOW.clone().lerp(DUST_MID,.30+lit*.48)
+        .lerp(DUST_WARM,Math.pow(lit,2)*.55);
+      if (t > .82){
+        color.lerp(DUST_MAGENTA,smoothstep(.82,1,t)*.38);
+        color.multiplyScalar(.74);
+      }
+      colors.push(color.r,color.g,color.b);
+    }
+  }
+  const stride = radial+1;
+  for (let ring = 0; ring < rings; ring++){
+    for (let segment = 0; segment < radial; segment++){
+      const a = ring*stride+segment, b = a+stride;
+      indices.push(a,b,a+1,a+1,b,b+1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.scientificRole = 'eroded-molecular-dust-pillar';
+  const material = new THREE.MeshStandardMaterial({
+    name: 'Carina.ErodedPillarMaterial',
+    vertexColors: true,
+    roughness: .94,
+    metalness: 0,
+    emissive: 0x110609,
+    emissiveIntensity: .42,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry,material);
+  mesh.name = 'sculpted-eroded-dust-pillar';
+  mesh.renderOrder = 3;
+
+  const capCenter = geometry.attributes.position.count;
+  const finalRing = rings*stride;
+  const capPositions = Array.from(geometry.attributes.position.array);
+  const capColors = Array.from(geometry.attributes.color.array);
+  let capX = 0, capY = 0, capZ = 0;
+  for (let segment = 0; segment < radial; segment++){
+    capX += capPositions[(finalRing+segment)*3];
+    capY += capPositions[(finalRing+segment)*3+1];
+    capZ += capPositions[(finalRing+segment)*3+2];
+  }
+  capPositions.push(capX/radial,capY/radial+.08,capZ/radial);
+  const capColor = DUST_MAGENTA.clone().lerp(DUST_WARM,.34).multiplyScalar(.56);
+  capColors.push(capColor.r,capColor.g,capColor.b);
+  const cappedIndices = Array.from(geometry.index.array);
+  for (let segment = 0; segment < radial; segment++)
+    cappedIndices.push(finalRing+segment,capCenter,finalRing+segment+1);
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(capPositions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(capColors,3));
+  geometry.setIndex(cappedIndices);
+  geometry.computeVertexNormals();
+
+  const rimPositions = [], rimColors = [], rimIndices = [];
+  const rimRings = 8;
+  for (let ring = 0; ring <= rimRings; ring++){
+    const t = .72+ring/rimRings*.28;
+    const centerX = x+Math.sin(t*Math.PI*.82+phase)*lean*t;
+    const centerZ = z+Math.cos(t*Math.PI*.73+phase)*lean*.46*t;
+    for (let segment = 0; segment <= radial; segment++){
+      const angle = segment/radial*Math.PI*2;
+      const r = pillarRadius(t,radius,phase,angle)+.26;
+      rimPositions.push(
+        centerX+Math.cos(angle)*r,
+        y+t*height+.25,
+        centerZ+Math.sin(angle)*r*.84+.25);
+      const windward = smoothstep(-.3,.88,Math.cos(angle-.62));
+      const color = IONIZED_BLUE.clone().lerp(IONIZED_GOLD,.28+.46*windward);
+      rimColors.push(color.r,color.g,color.b);
+    }
+  }
+  for (let ring = 0; ring < rimRings; ring++){
+    for (let segment = 0; segment < radial; segment++){
+      const a = ring*stride+segment, b = a+stride;
+      rimIndices.push(a,b,a+1,a+1,b,b+1);
+    }
+  }
+  const rimGeometry = new THREE.BufferGeometry();
+  rimGeometry.setAttribute('position',new THREE.Float32BufferAttribute(rimPositions,3));
+  rimGeometry.setAttribute('color',new THREE.Float32BufferAttribute(rimColors,3));
+  rimGeometry.setIndex(rimIndices);
+  rimGeometry.computeVertexNormals();
+  const rimMaterial = new THREE.MeshBasicMaterial({
+    name: 'Carina.PillarIonizedSkinMaterial',
+    vertexColors: true,
+    transparent: true,
+    opacity: .17,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  const rim = new THREE.Mesh(rimGeometry,rimMaterial);
+  rim.name = 'ionized-pillar-crown-skin';
+  rim.renderOrder = 4;
+  return { mesh, rim };
 }
 
 function makeGlow(softMap, color, scale){
@@ -345,38 +824,100 @@ function makeGlow(softMap, color, scale){
   return sprite;
 }
 
-function buildFormation(parent, softMap){
-  const cloud = new THREE.Group();
-  cloud.name = 'structured-feedback-bubble';
-  cloud.add(makeCorrugatedFeedbackShell('carina:formation', BUDGET.formationShellPoints, {
-    spread: [43, 29, 32],
-    palette: [0x2ac4c9, 0x2472ae, 0xc24e45, 0xf1a05e, 0x723d89],
-    thickness: .14,
-    opacity: .78,
-  }));
-  cloud.userData.ionizationRidges = 'corrugated-cavity-wall-colour';
-  parent.add(cloud);
-  const inner = makeCorrugatedFeedbackShell(
-    'carina:formation:inner-shell',
-    Math.round(BUDGET.formationShellPoints*.34),
-    {
-      spread: [28, 18, 19],
-      palette: [0x24a6b6, 0xe05d50, 0xf3bd79],
-      thickness: .10,
-      opacity: .54,
-    });
-  parent.add(inner);
+function makeNebulaGlow(softMap, { color, width, height, opacity, x, y, z, rotation = 0 }){
+  const glow = makeGlow(softMap,color,1);
+  glow.scale.set(width,height,1);
+  glow.position.set(x,y,z);
+  glow.material.opacity = opacity;
+  glow.material.rotation = rotation;
+  glow.renderOrder = 0;
+  glow.userData.nebularIllumination = true;
+  return glow;
+}
+
+function buildFormation(scope, parent, softMap){
+  const sculpture = new THREE.Group();
+  sculpture.name = 'carina-sculpted-feedback-front';
+  sculpture.add(
+    makeSculptedDustCliff(),
+    makeFormationCavityRims(),
+    makeIonizedCliffCrest(),
+    makeFormationDustKnots(scope),
+    makeFormationFilaments(),
+  );
+  const pillarSpecs = [
+    ['carina:pillar:west',-34,-25,-1,30,5.8,2.4],
+    ['carina:pillar:central',-13,-26,-2,43,7.2,3.4],
+    ['carina:pillar:east',15,-27,1,32,5.5,2.0],
+    ['carina:pillar:far-east',36,-28,-3,39,6.4,2.8],
+  ];
+  const pillars = [];
+  for (const [seed,x,y,z,height,radius,lean] of pillarSpecs){
+    const pillar = makeErodedDustPillar(seed,{x,y,z,height,radius,lean});
+    sculpture.add(pillar.mesh,pillar.rim);
+    pillars.push(pillar);
+  }
+  sculpture.userData.morphology = 'indexed-cliff-pillars-and-filled-ionization-fronts';
+  sculpture.userData.genericSoftClouds = false;
+  parent.add(sculpture);
+
+  const nebulaGlows = [
+    makeNebulaGlow(softMap,{color:0x1a7b88,width:72,height:45,opacity:.085,x:-24,y:7,z:-22,rotation:.18}),
+    makeNebulaGlow(softMap,{color:0x8a285d,width:68,height:39,opacity:.075,x:24,y:-1,z:-19,rotation:-.28}),
+    makeNebulaGlow(softMap,{color:0xb95b44,width:50,height:31,opacity:.052,x:2,y:18,z:-24,rotation:.45}),
+    makeNebulaGlow(softMap,{color:0x164f68,width:48,height:58,opacity:.065,x:42,y:13,z:-28,rotation:-.14}),
+  ];
+  for (let i = 0; i < FORMATION_CAVITIES.length; i++){
+    const cavity = FORMATION_CAVITIES[i];
+    const y = THREE.MathUtils.lerp(-39,formationCliffHeight(cavity.x),cavity.v);
+    nebulaGlows.push(makeNebulaGlow(softMap,{
+      color: i%2 ? 0xa22d67 : 0x218da2,
+      width: cavity.rx*3.0,
+      height: Math.max(5,cavity.ry*42),
+      opacity: .12,
+      x: cavity.x,
+      y,
+      z: -6,
+      rotation: i*.47,
+    }));
+  }
+  parent.add(...nebulaGlows);
+
+  const cavityLight = new THREE.PointLight(0x58dbe8,3.8,105,1.55);
+  cavityLight.position.set(-8,16,-18);
+  parent.add(cavityLight);
+  const warmLight = new THREE.PointLight(0xff884f,4.2,92,1.7);
+  warmLight.position.set(28,-1,16);
+  parent.add(warmLight);
   const rnd = mulberry(hashStr('carina:first-stars'));
   const stars = [];
-  for (let i = 0; i < 7; i++){
-    const star = makeGlow(softMap, i % 3 === 0 ? 0x9edcff : 0xffd5a1, 3 + rnd() * 4);
-    star.position.set(gaussian(rnd) * 25, gaussian(rnd) * 14, gaussian(rnd) * 13);
+  const embeddedStars = [
+    [-42,-2,-4,0x86eaff,6.8],[-3,7,-5,0xffbf7d,9.2],[21,-6,-3,0xf18dc7,6.4],[40,5,-4,0x78d9f2,5.9],
+  ];
+  for (let i = 0; i < embeddedStars.length; i++){
+    const [x,y,z,color,scale] = embeddedStars[i];
+    const halo = makeNebulaGlow(softMap,{
+      color,width:scale*1.55,height:scale,opacity:.065,x,y,z:z-.6,rotation:i*.61,
+    });
+    const star = makeGlow(softMap,color,.34+(i%2)*.12);
+    star.position.set(x,y,z);
+    star.userData.baseScale = star.scale.x;
+    star.userData.embeddedSource = true;
+    parent.add(halo,star); stars.push(star);
+    const light = new THREE.PointLight(color,1.7+(i%2)*.8,34,1.9);
+    light.position.copy(star.position);
+    parent.add(light);
+  }
+  for (let i = 0; i < 10; i++){
+    const star = makeGlow(softMap,i%3 === 0 ? 0x8be8ff : 0xffc184,.16+rnd()*.42);
+    star.position.set(gaussian(rnd) * 29, 2+gaussian(rnd) * 14, -13+gaussian(rnd) * 8);
+    star.userData.baseScale = star.scale.x;
     parent.add(star); stars.push(star);
   }
   const caption = addCaption(parent,
-    makeCaption('RECONSTRUCTION', 'Corrugated wind / UV cavity model — not an observation', 60),
+    makeCaption('RECONSTRUCTION', 'Sculpted molecular cliffs shaped by winds and UV — not an observation', 68),
     0, -38, 9);
-  return { cloud, inner, stars, caption };
+  return { sculpture, pillars, stars, cavityLight, warmLight, caption };
 }
 
 function buildLocator(parent){
@@ -435,40 +976,321 @@ function buildLocator(parent){
   return { plate };
 }
 
-function addHomunculusFallback(holder, softMap){
-  const root = new THREE.Group();
-  const geometry = new THREE.SphereGeometry(1, BUDGET.sphereSegments, Math.round(BUDGET.sphereSegments * .66));
-  const materials = [
-    new THREE.MeshStandardMaterial({
-      color: 0xe59b63, emissive: 0x34130b, roughness: .72,
-      transparent: true, opacity: .72, side: THREE.DoubleSide,
-    }),
-    new THREE.MeshStandardMaterial({
-      color: 0x77b9c5, emissive: 0x102939, roughness: .72,
-      transparent: true, opacity: .66, side: THREE.DoubleSide,
-    }),
-  ];
-  for (let i = 0; i < 2; i++){
-    const lobe = new THREE.Mesh(geometry, materials[i]);
-    lobe.scale.set(10.5, 17.5, 9.5);
-    lobe.position.y = i ? 13 : -13;
-    lobe.rotation.z = i ? -.11 : .11;
-    root.add(lobe);
-  }
-  const equator = new THREE.Mesh(
-    new THREE.RingGeometry(7.8, 12.2, 64, 4),
-    new THREE.MeshStandardMaterial({
-      color: 0x8d4f58, emissive: 0x261016, roughness: .82,
-      transparent: true, opacity: .24, side: THREE.DoubleSide,
-    }),
+function homunculusRadius(t, angle, phase){
+  const bulb = Math.pow(Math.max(0,Math.sin(Math.PI*t)),.60);
+  const waist = .78*(1-t)+.08;
+  const corrugation = 1
+    +.105*Math.sin(angle*7+t*18+phase)
+    +.052*Math.sin(angle*17-t*29-phase*.7)
+    +.030*Math.sin(angle*31+t*43)
+    +(valueNoise(angle*1.9,t*16.0,41.3)-.5)*.12;
+  return (waist+7.65*bulb)*corrugation;
+}
+
+function homunculusPoint(sign, t, angle, phase, radialScale = 1){
+  const radius = homunculusRadius(t,angle,phase)*radialScale;
+  const drift = Math.sin(Math.PI*t);
+  return new THREE.Vector3(
+    sign*drift*1.95+Math.cos(angle)*radius,
+    sign*(.58+t*28.8),
+    sign*drift*.58+Math.sin(angle)*radius*.82,
   );
-  equator.name = 'broad-homunculus-equatorial-skirt';
-  equator.rotation.x = HALF_PI;
-  root.add(equator);
-  const star = makeGlow(softMap, 0xffe4b2, 7.5);
-  root.add(star);
+}
+
+function homunculusSurfaceColor(sign, t, angle){
+  const waist = new THREE.Color(0x8c235a);
+  const amber = new THREE.Color(0xf09142);
+  const polar = new THREE.Color(sign > 0 ? 0xd85a73 : 0x56aec3);
+  const color = waist.lerp(amber,smoothstep(.02,.62,t));
+  color.lerp(polar,smoothstep(.72,1,t)*.68);
+  const striation = .66+.34*(.5+.5*Math.sin(t*37+angle*9+sign*.8));
+  return color.multiplyScalar(striation);
+}
+
+function makeHomunculusLobeGeometry(sign){
+  const radial = BUDGET.homunculusRadial;
+  const rings = BUDGET.homunculusRings;
+  const phase = sign > 0 ? .64 : 2.17;
+  const positions = [], colors = [], uvs = [], indices = [];
+  for (let ring = 0; ring <= rings; ring++){
+    const t = ring/(rings+1);
+    for (let segment = 0; segment <= radial; segment++){
+      const angle = segment/radial*Math.PI*2;
+      const point = homunculusPoint(sign,t,angle,phase);
+      positions.push(point.x,point.y,point.z);
+      const color = homunculusSurfaceColor(sign,t,angle);
+      colors.push(color.r,color.g,color.b);
+      uvs.push(segment/radial,t);
+    }
+  }
+  const stride = radial+1;
+  for (let ring = 0; ring < rings; ring++){
+    for (let segment = 0; segment < radial; segment++){
+      const a = ring*stride+segment, b = a+stride;
+      if (sign > 0) indices.push(a,b,a+1,a+1,b,b+1);
+      else indices.push(a,a+1,b,a+1,b+1,b);
+    }
+  }
+  const tip = positions.length/3;
+  const tipPoint = homunculusPoint(sign,1,0,phase,0);
+  positions.push(tipPoint.x,tipPoint.y,tipPoint.z);
+  const tipColor = homunculusSurfaceColor(sign,1,0);
+  colors.push(tipColor.r,tipColor.g,tipColor.b);
+  uvs.push(.5,1);
+  const finalRing = rings*stride;
+  for (let segment = 0; segment < radial; segment++){
+    if (sign > 0) indices.push(finalRing+segment,tip,finalRing+segment+1);
+    else indices.push(finalRing+segment,finalRing+segment+1,tip);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.scientificRole = 'procedural-bipolar-homunculus-fallback';
+  return geometry;
+}
+
+function makeHomunculusLobe(sign){
+  const geometry = makeHomunculusLobeGeometry(sign);
+  const material = new THREE.MeshPhysicalMaterial({
+    name: 'Carina.HomunculusDustShellMaterial',
+    vertexColors: true,
+    emissive: 0x56152d,
+    emissiveIntensity: 1.18,
+    roughness: .68,
+    metalness: 0,
+    clearcoat: .20,
+    clearcoatRoughness: .76,
+    transparent: true,
+    opacity: .62,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  material.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>','#include <common>\nvarying vec2 vHomunculusUv;')
+      .replace('#include <uv_vertex>','#include <uv_vertex>\nvHomunculusUv = uv;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>','#include <common>\nvarying vec2 vHomunculusUv;')
+      .replace('#include <alphatest_fragment>',`float shellBands = .5
+        + .27*sin(vHomunculusUv.y*104.0+sin(vHomunculusUv.x*31.0)*2.4)
+        + .17*sin(vHomunculusUv.x*97.0-vHomunculusUv.y*43.0);
+        diffuseColor.a *= smoothstep(.11,.82,shellBands)*.62+.28;
+        if (diffuseColor.a < .09) discard;`);
+  };
+  material.customProgramCacheKey = () => 'carina-homunculus-ragged-shell-v2';
+  const shell = new THREE.Mesh(geometry,material);
+  shell.name = sign > 0 ? 'north-corrugated-homunculus-lobe' : 'south-corrugated-homunculus-lobe';
+  shell.renderOrder = 3;
+  const inner = new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({
+    name: 'Carina.HomunculusInnerGlowMaterial',
+    color: sign > 0 ? 0xff814b : 0x58bbd3,
+    transparent: true,
+    opacity: .40,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.BackSide,
+    toneMapped: false,
+  }));
+  inner.name = 'homunculus-heated-inner-shell';
+  inner.scale.setScalar(.968);
+  inner.renderOrder = 2;
+  const silhouette = new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({
+    name: 'Carina.HomunculusSilhouetteGlowMaterial',
+    color: sign > 0 ? 0xffa15f : 0x68b8ce,
+    transparent: true,
+    opacity: .29,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.BackSide,
+    toneMapped: false,
+  }));
+  silhouette.name = 'homunculus-polar-scattering-rim';
+  silhouette.scale.setScalar(1.026);
+  silhouette.renderOrder = 1;
+  const group = new THREE.Group();
+  group.add(silhouette,inner,shell);
+  return group;
+}
+
+function makeHomunculusPolarCap(sign){
+  const radial = BUDGET.homunculusRadial;
+  const rings = TEX_TIER === 'low' ? 7 : 11;
+  const phase = sign > 0 ? .64 : 2.17;
+  const positions = [], colors = [], indices = [];
+  for (let ring = 0; ring <= rings; ring++){
+    const t = .74+ring/rings*.245;
+    for (let segment = 0; segment <= radial; segment++){
+      const angle = segment/radial*Math.PI*2;
+      const point = homunculusPoint(sign,t,angle,phase,1.035);
+      positions.push(point.x,point.y,point.z);
+      const color = (sign > 0 ? IONIZED_GOLD : IONIZED_BLUE).clone()
+        .lerp(sign > 0 ? IONIZED_BLUE : IONIZED_MAGENTA,
+          smoothstep(.78,1,t)*.62)
+        .multiplyScalar(.46+.26*(.5+.5*Math.sin(angle*6+t*29)));
+      colors.push(color.r,color.g,color.b);
+    }
+  }
+  const stride = radial+1;
+  for (let ring = 0; ring < rings; ring++){
+    for (let segment = 0; segment < radial; segment++){
+      const a = ring*stride+segment, b = a+stride;
+      indices.push(a,b,a+1,a+1,b,b+1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.userData.scientificRole = 'polar-dust-cap-scattering-layer';
+  const material = new THREE.MeshBasicMaterial({
+    name: 'Carina.HomunculusPolarCapMaterial',
+    vertexColors: true,
+    transparent: true,
+    opacity: .36,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  const cap = new THREE.Mesh(geometry,material);
+  cap.name = sign > 0 ? 'north-ragged-polar-cap' : 'south-ragged-polar-cap';
+  cap.renderOrder = 6;
+  return cap;
+}
+
+function makeHomunculusSkirt(){
+  const angular = TEX_TIER === 'low' ? 54 : 96;
+  const radial = TEX_TIER === 'low' ? 7 : 12;
+  const positions = [], colors = [], indices = [];
+  for (let ring = 0; ring <= radial; ring++){
+    const t = ring/radial;
+    for (let segment = 0; segment <= angular; segment++){
+      const angle = segment/angular*Math.PI*2;
+      const ragged = 1+.08*Math.sin(angle*7)+.035*Math.sin(angle*19+1.2);
+      const radius = THREE.MathUtils.lerp(1.15,18.5,t)*ragged;
+      const y = Math.sin(angle)*t*3.8
+        +Math.sin(angle*3+.4)*t*1.65
+        +Math.sin(angle*9-t*4)*.34;
+      positions.push(Math.cos(angle)*radius,y,Math.sin(angle)*radius*.76);
+      const color = new THREE.Color(0x65183e).lerp(new THREE.Color(0xe37343),
+        .22+.58*t*(.5+.5*Math.sin(angle*4.0)));
+      colors.push(color.r,color.g,color.b);
+    }
+  }
+  const stride = angular+1;
+  for (let ring = 0; ring < radial; ring++){
+    for (let segment = 0; segment < angular; segment++){
+      const a = ring*stride+segment, b = a+stride;
+      indices.push(a,b,a+1,a+1,b,b+1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.userData.scientificRole = 'equatorial-ejecta-skirt';
+  const material = new THREE.MeshPhysicalMaterial({
+    name: 'Carina.HomunculusEquatorialSkirtMaterial',
+    vertexColors: true,
+    emissive: 0x57142f,
+    emissiveIntensity: 1.04,
+    roughness: .86,
+    metalness: 0,
+    transparent: true,
+    opacity: .58,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const skirt = new THREE.Mesh(geometry,material);
+  skirt.name = 'ragged-homunculus-equatorial-skirt';
+  skirt.renderOrder = 4;
+  return skirt;
+}
+
+function makeHomunculusDustKnots(scope){
+  const count = BUDGET.homunculusDustKnots;
+  const geometry = new THREE.IcosahedronGeometry(.22,0);
+  geometry.userData.scientificRole = 'faceted-dust-knot-prototype';
+  const material = new THREE.MeshStandardMaterial({
+    name: 'Carina.HomunculusDustKnotMaterial',
+    color: 0xffffff,
+    emissive: 0x2b0c09,
+    emissiveIntensity: .48,
+    roughness: .96,
+    metalness: 0,
+  });
+  const knots = scope.own(new THREE.InstancedMesh(geometry,material,count));
+  knots.name = 'homunculus-surface-dust-knots';
+  knots.userData.instanceRole = 'interpretive-dust-striation-detail';
+  knots.userData.scientificShapeBasis = 'spectroscopy-derived-bipolar-envelope';
+  const rnd = mulberry(hashStr('carina:homunculus:dust-knots'));
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < count; i++){
+    const equatorial = i%5 === 0;
+    const angle = rnd()*Math.PI*2;
+    if (equatorial){
+      const radius = 4+Math.pow(rnd(),.68)*13.5;
+      dummy.position.set(
+        Math.cos(angle)*radius,
+        gaussian(rnd)*.72+Math.sin(angle*3)*.55,
+        Math.sin(angle)*radius*.76);
+    } else {
+      const sign = i%2 ? 1 : -1;
+      const t = .08+Math.pow(rnd(),.86)*.86;
+      const phase = sign > 0 ? .64 : 2.17;
+      dummy.position.copy(homunculusPoint(sign,t,angle,phase,1.024));
+    }
+    dummy.rotation.set(rnd()*Math.PI,rnd()*Math.PI,rnd()*Math.PI);
+    const scale = .32+Math.pow(rnd(),2.2)*1.45;
+    dummy.scale.set(
+      scale*(equatorial ? 1.2+rnd()*1.5 : .55+rnd()*.75),
+      scale*(equatorial ? .18+rnd()*.18 : .25+rnd()*.42),
+      scale*(equatorial ? .32+rnd()*.50 : .28+rnd()*.55));
+    dummy.updateMatrix();
+    knots.setMatrixAt(i,dummy.matrix);
+    knots.setColorAt(i,new THREE.Color(i%5 === 0 ? 0x79a8ad : 0xb75d3f)
+      .multiplyScalar(.68+rnd()*.38));
+  }
+  knots.instanceMatrix.needsUpdate = true;
+  if (knots.instanceColor) knots.instanceColor.needsUpdate = true;
+  knots.renderOrder = 5;
+  return knots;
+}
+
+function addHomunculusFallback(scope, holder, softMap){
+  const root = new THREE.Group();
+  root.name = 'detailed-bipolar-homunculus-system';
+  const surfaceRoot = new THREE.Group();
+  surfaceRoot.name = 'procedural-homunculus-loading-fallback';
+  surfaceRoot.add(
+    makeHomunculusLobe(1),
+    makeHomunculusLobe(-1),
+    makeHomunculusPolarCap(1),
+    makeHomunculusPolarCap(-1),
+  );
+  const skirt = makeHomunculusSkirt();
+  skirt.rotation.set(.34,.10,-.12);
+  const dustKnots = makeHomunculusDustKnots(scope);
+  root.add(surfaceRoot,skirt,dustKnots);
+  const star = makeGlow(softMap,0xe9fbff,3.8);
+  star.renderOrder = 8;
+  const warmHalo = makeGlow(softMap,0xff6e54,8.2);
+  warmHalo.material.opacity = .24;
+  warmHalo.renderOrder = 7;
+  root.add(warmHalo,star);
+  const centralLight = new THREE.PointLight(0xc9efff,7.6,78,1.72);
+  root.add(centralLight);
+  const polarLight = new THREE.PointLight(0x62bfd2,3.4,64,1.8);
+  polarLight.position.set(0,20,-2);
+  root.add(polarLight);
   holder.add(root);
-  return { root, star };
+  return { root, surfaceRoot, skirt, dustKnots, star, warmHalo };
 }
 
 function colorizeHomunculus(geometry, majorAxis){
@@ -477,18 +1299,26 @@ function colorizeHomunculus(geometry, majorAxis){
   const min = box.min.getComponent(majorAxis);
   const span = Math.max(.0001, box.max.getComponent(majorAxis) - min);
   const colors = new Float32Array(positions.count * 3);
-  const cool = new THREE.Color(0x62afbd);
-  const waist = new THREE.Color(0xa95055);
-  const warm = new THREE.Color(0xf0ac69);
+  const otherAxes = [0,1,2].filter(axis => axis !== majorAxis);
+  const cool = new THREE.Color(0x52aec2);
+  const waist = new THREE.Color(0x8a2158);
+  const warm = new THREE.Color(0xef8d42);
   for (let i = 0; i < positions.count; i++){
     const component = majorAxis === 0 ? positions.getX(i)
       : majorAxis === 1 ? positions.getY(i)
       : positions.getZ(i);
     const t = (component - min) / span;
-    const color = t < .5
-      ? cool.clone().lerp(waist, t * 2)
-      : waist.clone().lerp(warm, (t - .5) * 2);
-    const brightness = .74 + Math.abs(t - .5) * .42;
+    const latitude = Math.abs(t-.5)*2;
+    const sideA = otherAxes[0] === 0 ? positions.getX(i)
+      : otherAxes[0] === 1 ? positions.getY(i)
+      : positions.getZ(i);
+    const sideB = otherAxes[1] === 0 ? positions.getX(i)
+      : otherAxes[1] === 1 ? positions.getY(i)
+      : positions.getZ(i);
+    const azimuth = Math.atan2(sideB,sideA);
+    const color = waist.clone().lerp(warm,smoothstep(.04,.72,latitude));
+    color.lerp(cool,smoothstep(.76,1,latitude)*.68);
+    const brightness = .68+.28*(.5+.5*Math.sin(latitude*35+azimuth*8));
     colors[i*3] = color.r * brightness;
     colors[i*3+1] = color.g * brightness;
     colors[i*3+2] = color.b * brightness;
@@ -510,23 +1340,75 @@ function loadHomunculus(scope, holder, fallback){
       const majorAxis = values.indexOf(Math.max(...values));
       colorizeHomunculus(geometry, majorAxis);
 
-      const material = new THREE.MeshStandardMaterial({
+      const material = new THREE.MeshPhysicalMaterial({
+        name: 'Carina.SpectroscopyHomunculusMaterial',
         vertexColors: true,
-        emissive: 0x170b0d,
-        roughness: .7,
+        emissive: 0x59152d,
+        emissiveIntensity: 1.08,
+        roughness: .64,
         metalness: 0,
+        clearcoat: .18,
+        clearcoatRoughness: .76,
         transparent: true,
-        opacity: .74,
+        opacity: .66,
+        depthWrite: false,
         side: THREE.DoubleSide,
       });
+      material.onBeforeCompile = shader => {
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>','#include <common>\nvarying vec3 vEtaLocal;')
+          .replace('#include <begin_vertex>','#include <begin_vertex>\nvEtaLocal = position;');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>','#include <common>\nvarying vec3 vEtaLocal;')
+          .replace('#include <alphatest_fragment>',`float etaStrata = .5
+            +.25*sin(dot(vEtaLocal,vec3(8.2,5.7,11.4))*5.0)
+            +.18*sin(dot(vEtaLocal,vec3(-3.1,13.0,6.4))*7.0);
+            diffuseColor.a *= .56+.42*smoothstep(.08,.91,etaStrata);`);
+      };
+      material.customProgramCacheKey = () => 'carina-loaded-homunculus-dust-v2';
       const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = 'spectroscopy-derived-homunculus-surface';
       if (majorAxis === 0) mesh.rotation.z = HALF_PI;
       else if (majorAxis === 2) mesh.rotation.x = -HALF_PI;
-      const scale = 52 / Math.max(...values);
+      const scale = 57 / Math.max(...values);
       mesh.scale.setScalar(scale);
+      mesh.renderOrder = 4;
 
-      holder.add(mesh);
-      fallback.root.visible = false;
+      const glow = new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({
+        name: 'Carina.SpectroscopyHomunculusRimMaterial',
+        color: 0xff8c55,
+        transparent: true,
+        opacity: .24,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.BackSide,
+        toneMapped: false,
+      }));
+      glow.name = 'spectroscopy-homunculus-scattering-rim';
+      glow.rotation.copy(mesh.rotation);
+      glow.scale.setScalar(scale*1.025);
+      glow.renderOrder = 2;
+      const innerGlow = new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({
+        name: 'Carina.SpectroscopyHomunculusInnerLightMaterial',
+        color: 0x8bd7e8,
+        transparent: true,
+        opacity: .30,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.BackSide,
+        toneMapped: false,
+      }));
+      innerGlow.name = 'spectroscopy-homunculus-inner-blue-white-light';
+      innerGlow.rotation.copy(mesh.rotation);
+      innerGlow.scale.setScalar(scale*.965);
+      innerGlow.renderOrder = 1;
+      const scientificRoot = new THREE.Group();
+      scientificRoot.name = 'loaded-scientific-homunculus-model';
+      scientificRoot.add(innerGlow,glow,mesh);
+      scientificRoot.scale.set(.70,1,.70);
+      holder.add(scientificRoot);
+      fallback.surfaceRoot.visible = false;
+      fallback.dustKnots.scale.set(1.34,.98,1.34);
       holder.userData.scientificModelLoaded = true;
     }, undefined, () => {
       if (!scope.disposed) holder.userData.scientificModelLoaded = false;
@@ -539,8 +1421,10 @@ function loadHomunculus(scope, holder, fallback){
 function buildEta(scope, parent, softMap){
   const modelHolder = new THREE.Group();
   modelHolder.position.x = -27;
+  modelHolder.rotation.set(.17,.20,-.46);
+  modelHolder.scale.setScalar(.82);
   parent.add(modelHolder);
-  const fallback = addHomunculusFallback(modelHolder, softMap);
+  const fallback = addHomunculusFallback(scope, modelHolder, softMap);
   loadHomunculus(scope, modelHolder, fallback);
 
   const uv = makePhotoPlate(scope, parent, {
@@ -843,7 +1727,7 @@ export function buildCarinaFeatured(){
   for (const state of Object.values(CARINA_STATES))
     states.set(state, createStateRoot(group, state));
 
-  const formation = buildFormation(states.get(CARINA_STATES.FORMATION), softMap);
+  const formation = buildFormation(scope, states.get(CARINA_STATES.FORMATION), softMap);
   buildLocator(states.get(CARINA_STATES.LOCATOR));
   const eta = buildEta(scope, states.get(CARINA_STATES.ETA_ERUPTION), softMap);
   const hubble = buildHubble(scope, states.get(CARINA_STATES.HUBBLE));
@@ -875,6 +1759,8 @@ export function buildCarinaFeatured(){
     activeState = state;
     for (const [name, root] of states) root.visible = name === state;
     group.userData.carinaState = state;
+    group.userData.activePresentation = state;
+    group.userData.observationRequested = CARINA_OBSERVATION_STATES.has(state);
   }
   selectState(activeState);
   group.userData.qualityBudget = BUDGET;
@@ -896,7 +1782,9 @@ export function buildCarinaFeatured(){
     autoRotate: false,
     hasIR: false,
     isImage: true,
-    modelCredit: MODEL_CREDIT,
+    creditForPresentation(){
+      return CARINA_PRESENTATION_CREDITS[activeState] || null;
+    },
     setMoment(visual){
       if (!scope.disposed && visual && visual.state) selectState(visual.state);
     },
@@ -905,15 +1793,20 @@ export function buildCarinaFeatured(){
       elapsed += dt;
       if (activeState === CARINA_STATES.FORMATION){
         setCaptionOpacity(formation.caption,canonicalHeadOn(camera));
-        formation.cloud.rotation.y += dt * .022;
-        formation.inner.rotation.y -= dt * .014;
+        formation.sculpture.rotation.y = Math.sin(elapsed*.075)*.035;
+        formation.cavityLight.intensity = 3.6+Math.sin(elapsed*.74)*.34;
+        formation.warmLight.intensity = 4.0+Math.sin(elapsed*.58+1.1)*.42;
+        for (let i = 0; i < formation.pillars.length; i++)
+          formation.pillars[i].rim.material.opacity = .14
+            +.025*Math.sin(elapsed*.64+i*.91);
         for (let i = 0; i < formation.stars.length; i++){
           const pulse = 1 + Math.sin(elapsed * (1.1 + i * .09) + i) * .08;
-          formation.stars[i].scale.setScalar((3.2 + (i % 3)) * pulse);
+          formation.stars[i].scale.setScalar(formation.stars[i].userData.baseScale*pulse);
         }
       } else if (activeState === CARINA_STATES.ETA_ERUPTION){
         const pulse = 1 + Math.sin(elapsed * 1.6) * .08;
-        eta.fallback.star.scale.setScalar(7.5 * pulse);
+        eta.fallback.star.scale.setScalar(3.8*pulse);
+        eta.fallback.warmHalo.scale.setScalar(8.2*(1+(pulse-1)*.54));
         const headOn = canonicalHeadOn(camera);
         eta.uv.material.opacity = headOn;
         for (const caption of eta.captions) setCaptionOpacity(caption,headOn);

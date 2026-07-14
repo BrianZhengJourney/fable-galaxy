@@ -81,8 +81,8 @@ export const LANDMARKS = [
     subtitle: "Intricate dying-star shells",
     raDeg: 269.639, decDeg: 66.633, distance: "3,300 ly", date: "1786 (discovered by Herschel)",
     famousFor: "The most intricate planetary nebula",
-    wow: "Its central star has puffed off at least eleven nested bubbles of gas, like tree rings of cosmic death.",
-    story: "The Cat's Eye is one of the most structurally complex planetary nebulae known, a dying star surrounded by at least eleven concentric shells of gas ejected in pulses. Hubble revealed an astonishing pattern of knots, jets, and bubbles at its heart. It sits in the northern constellation Draco and was among the first planetary nebulae ever studied spectroscopically."
+    wow: "Hubble revealed at least eleven nested rings around its complex core, like tree rings of cosmic death.",
+    story: "The Cat's Eye is one of the most structurally complex planetary nebulae known, a dying star surrounded by at least eleven concentric shells. Episodic mass loss may have formed them, though waves in a smoother outflow remain another explanation. Hubble revealed an astonishing pattern of knots, jets, and bubbles at its heart. It sits in the northern constellation Draco and was among the first planetary nebulae ever studied spectroscopically."
   },
   {
     id: "crab-nebula", name: "CRAB NEBULA",
@@ -95,7 +95,7 @@ export const LANDMARKS = [
   },
   {
     id: "veil-nebula", name: "VEIL NEBULA",
-    designation: "NGC 6960/6992 \u00b7 Cygnus Loop", category: "NEBULA", vizStyle: "remnant",
+    designation: "NGC 6960/6992 \u00b7 Cygnus Loop", category: "SUPERNOVA", vizStyle: "remnant",
     subtitle: "Ghostly filaments of a blast",
     raDeg: 311.5, decDeg: 30.7, distance: "2,400 ly", date: "1784 (discovered by Herschel)",
     famousFor: "Delicate supernova-remnant filaments",
@@ -125,7 +125,7 @@ export const LANDMARKS = [
     designation: "M1 \u00b7 NGC 1952 \u00b7 SN 1054", category: "SUPERNOVA", vizStyle: "remnant",
     subtitle: "The star Chinese astronomers saw",
     raDeg: 83.6287, decDeg: 22.0147, distance: "6,500 ly", date: "1054 CE (July 4)",
-    famousFor: "First historical supernova tied to a surviving nebula",
+    famousFor: "Remnant securely linked to the 1054 guest star",
     wow: "The pulsar at its core spins 30 times a second and is so precise it rivals an atomic clock.",
     story: "In 1054 CE, Chinese court astronomers recorded a 'guest star' in Taurus so bright it was visible in daylight for 23 days and at night for nearly two years; Japanese and Arab observers noted it too. What remains is the Crab Nebula, the expanding wreckage of that core-collapse explosion, with the fast-spinning Crab Pulsar at its heart. It became Charles Messier's first catalog entry (M1) in 1758."
   },
@@ -159,11 +159,11 @@ export const LANDMARKS = [
   {
     id: "cassiopeia-a", name: "CASSIOPEIA A",
     designation: "Cas A \u00b7 3C 461 \u00b7 SNR G111.7-2.1", category: "SUPERNOVA", vizStyle: "remnant",
-    subtitle: "Brightest radio source in the sky",
+    subtitle: "A young shattered stellar remnant",
     raDeg: 350.8642, decDeg: 58.8117, distance: "11,000 ly", date: "~1680 CE",
-    famousFor: "Youngest known Milky Way remnant, brightest cosmic radio source",
+    famousFor: "Young massive-star remnant and exceptionally bright radio source",
     wow: "JWST revealed a glowing green 'Green Monster' structure and a light echo still traveling through surrounding dust.",
-    story: "Cassiopeia A is the youngest known Galactic supernova remnant, from a star that exploded around 1680; oddly, almost no one clearly recorded the event, possibly because dust dimmed it. It is the brightest radio source in the sky beyond the Sun and a prime target for Chandra and JWST. Its shockwave still expands at thousands of kilometers per second."
+    story: "Cassiopeia A is the youngest known Milky Way remnant from the explosion of a massive star, which likely occurred around 1680; almost no secure historical record survives, possibly because dust dimmed it. It is one of the brightest extrasolar radio sources in the sky and a prime target for Chandra and JWST. Its shockwave still expands at thousands of kilometers per second."
   },
   {
     id: "vela-remnant", name: "VELA REMNANT",

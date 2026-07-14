@@ -108,8 +108,10 @@ Primary sources & licenses:
   Tycho's Supernova, Cygnus X-1.
 - **Event Horizon Telescope Collaboration / ESO** (CC BY 4.0): Sgr A*.
 - **LIGO Scientific Collaboration & Virgo** (CC BY 3.0): GW150914 signal figure.
-- **ESO / VISTA** (CC BY 4.0): Lagoon, Large & Small Magellanic Clouds,
-  Halley's Comet.
+- **ESO / IDA / Danish 1.5 m** (CC BY 4.0): Lagoon Nebula optical B/V/R
+  composite (`potw1016a`). Credit: R. Gendler, U.G. Jørgensen and K. Harpsøe.
+  Source: <https://www.eso.org/public/images/potw1016a/>.
+- **ESO / VISTA** (CC BY 4.0): Large & Small Magellanic Clouds, Halley's Comet.
 - **ESA / Planck Collaboration** (CC BY 4.0): Cosmic Microwave Background.
 - **NASA/ESA, the DSS-II and GSC-II Consortia**: full-field Rosette Nebula
   (`opo0118c`), with images from the 'Palomar Observatory-STScI Digital Sky

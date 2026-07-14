@@ -22,12 +22,21 @@ import {
 import { SUPPORTED_PLANET_EPOCH_SURFACES } from '../js/data/planetEpochRecipes.js';
 import { parseAtlasHash } from '../js/core/route.js';
 import {
+  FEATURED_NEBULA_PROFILE_IDS,
   NEBULA_PROFILES,
   NEBULA_PROFILE_IDS,
   nebulaProfile,
 } from '../js/data/nebulaProfiles.js';
 import { LANDMARK_IMAGES } from '../js/data/landmarkImages.js';
 import { LANDMARK_DEPTH } from '../js/data/landmarkDepth.js';
+import {
+  EXPLORE_LANDMARK_IDS,
+  EXPLORE_SECTIONS,
+} from '../js/data/exploreSections.js';
+import {
+  SUPERNOVA_EXPERIENCE_IDS,
+  supernovaExperience,
+} from '../js/data/supernovaExperiences.js';
 import {
   keplerPositionAtEccentricAnomaly,
   S_STAR_ORBITS,
@@ -445,7 +454,7 @@ test('black-hole catalog identity and featured dispatch stay physically distinct
   for (const id of ['cygnus-x-1', 'm87-star', 'sagittarius-a-star'])
     assert.equal(rendererFor(id), 'black-hole-lensing-v1', id);
   assert.equal(rendererFor('gw150914'), 'black-hole-merger-v1');
-  assert.equal(rendererFor('m87-black-hole-image'), 'm87-multi-state');
+  assert.equal(rendererFor('m87-black-hole-image'), 'm87-model-plus-six-state-evidence');
 });
 
 test('the shared black-hole core preserves the relativistic rendering contract', async () => {
@@ -551,7 +560,7 @@ test('modeled black-hole field stories disclose scientific visualization', () =>
   }
 });
 
-test('the upgraded nebula collection has complete science-led 3D profiles', () => {
+test('the upgraded nebula collection opens on 3D models and preserves exact observations', async () => {
   const catalogIds = new Set(LANDMARKS.map(entry => entry.id));
   const expected = [
     'orion-nebula', 'horsehead-nebula', 'ring-nebula', 'helix-nebula',
@@ -560,6 +569,8 @@ test('the upgraded nebula collection has complete science-led 3D profiles', () =
   ];
   assert.deepEqual([...NEBULA_PROFILE_IDS].sort(), expected.sort());
   assert.equal(new Set(NEBULA_PROFILE_IDS).size, 9);
+  assert.deepEqual([...FEATURED_NEBULA_PROFILE_IDS].sort(),
+    expected.filter(id => id !== 'rosette-nebula').sort());
 
   for (const id of NEBULA_PROFILE_IDS){
     const profile = nebulaProfile(id);
@@ -568,19 +579,299 @@ test('the upgraded nebula collection has complete science-led 3D profiles', () =
     assert.ok(LANDMARK_IMAGES[id]?.file, id + ': missing observation');
     assert.ok(LANDMARK_DEPTH[id], id + ': missing aligned depth map');
     assert.ok(profile.family && profile.camera && profile.volume, id + ': incomplete shape');
-    assert.ok(Math.abs(profile.camera.startPhi-Math.PI/2) < 0.001,
-      id + ': observation must start head-on');
+    assert.ok(Math.abs(profile.camera.startTheta) >= .4,
+      id + ': model must start visibly off-axis');
+    assert.ok(profile.camera.startPhi > .9 && profile.camera.startPhi < 1.55,
+      id + ': model start pitch must preserve readable depth');
     assert.ok(profile.palette && profile.structure, id + ': incomplete visual recipe');
     assert.ok(Array.isArray(profile.sources), id + ': sources must be an array');
     assert.match(profile.source, /^https:\/\//, id + ': invalid morphology source');
+    assert.match(profile.observationSource, /^https:\/\//,
+      id + ': invalid observation source');
+    assert.ok(profile.observationDate, id + ': missing observation date');
     assert.ok(profile.caveat.length > 40, id + ': missing uncertainty caveat');
-    const experience = landmarkExperience(LANDMARKS.find(entry => entry.id === id));
-    const observation = experience.moments.find(moment =>
-      moment.id === experience.defaultMoment);
-    assert.ok(Math.abs(observation.visual.phi-Math.PI/2) < 0.001,
-      id + ': archive observation must preserve the exact head-on plate');
   }
+
+  for (const id of FEATURED_NEBULA_PROFILE_IDS){
+    const profile = nebulaProfile(id);
+    const experience = landmarkExperience(LANDMARKS.find(entry => entry.id === id));
+    const model = experience.moments.find(moment =>
+      moment.id === experience.defaultMoment);
+    assert.equal(model.kind, 'SCIENTIFIC 3D MODEL', id + ': default must be model-first');
+    assert.equal(model.visual.state, 'model', id + ': default must explicitly suppress observations');
+    assert.equal(model.visual.theta, profile.camera.startTheta, id + ': model theta');
+    assert.equal(model.visual.phi, profile.camera.startPhi, id + ': model phi');
+    const observation = experience.moments.find(moment =>
+      moment.id === id + '-observation');
+    assert.ok(observation, id + ': missing exact source observation');
+    assert.equal(observation.date, profile.observationDate,
+      id + ': observation must use its actual image date');
+    assert.equal(observation.source, profile.observationSource,
+      id + ': observation must link its exact image source');
+    assert.equal(observation.visual.state, 'observation', id + ': observation state');
+    assert.equal(observation.visual.observation, true, id + ': observation flag');
+    assert.equal(observation.visual.theta, 0, id + ': observation theta');
+    assert.ok(Math.abs(observation.visual.phi-Math.PI/2) < 0.001,
+      id + ': source observation must preserve the exact head-on plate');
+  }
+  const rosette=landmarkExperience(
+    LANDMARKS.find(entry=>entry.id === 'rosette-nebula'));
+  assert.equal(rosette.moments[0].kind,'OBSERVATION',
+    'archived Rosette must not claim a high-fidelity model');
+  assert.equal(FEATURED_NEBULA_PROFILE_IDS.includes('rosette-nebula'),false,
+    'Rosette must remain absent from FEATURED_EXHIBIT_IDS');
+  const registry=await readFile(
+    new URL('../js/procgen/featured/registry.js',import.meta.url),'utf8');
+  assert.match(registry,/FEATURED_NEBULA_PROFILE_IDS\.map\(id => \[id,/,
+    'featured registry must consume the curated subset rather than all archive profiles');
   assert.equal(nebulaProfile('pillars-of-creation'), null);
+});
+
+test('Explore exposes only curated, unique, model-led identities', async () => {
+  assert.deepEqual(EXPLORE_SECTIONS.map(section => section.id), [
+    'nebulae', 'black-holes', 'remnants', 'missions',
+  ]);
+  assert.equal(EXPLORE_LANDMARK_IDS.length, 18);
+  assert.equal(new Set(EXPLORE_LANDMARK_IDS).size, EXPLORE_LANDMARK_IDS.length);
+  const expected = [
+    'pillars-of-creation', 'orion-nebula', 'carina-nebula',
+    'horsehead-nebula', 'ring-nebula', 'helix-nebula', 'lagoon-nebula',
+    'cats-eye-nebula', 'trifid-nebula',
+    'cygnus-x-1', 'sagittarius-a-star', 'm87-star', 'gw150914',
+    'crab-nebula-sn-1054', 'sn-1987a', 'cassiopeia-a', 'veil-nebula',
+    'pale-blue-dot',
+  ];
+  assert.deepEqual([...EXPLORE_LANDMARK_IDS], expected);
+  const catalog = new Map(LANDMARKS.map(entry => [entry.id, entry]));
+  for (const id of EXPLORE_LANDMARK_IDS){
+    assert.ok(catalog.has(id), id + ': missing catalog entry');
+    assert.ok(LANDMARK_IMAGES[id], id + ': missing Explore image');
+  }
+  for (const omitted of [
+    'crab-nebula', 'm87-black-hole-image', 'rosette-nebula',
+    'tycho-sn-1572', 'kepler-sn-1604', 'vela-remnant', 'betelgeuse',
+  ]) assert.equal(EXPLORE_LANDMARK_IDS.includes(omitted), false, omitted + ': duplicate or low-fidelity');
+  assert.equal(catalog.get('veil-nebula').category, 'SUPERNOVA');
+
+  const registry = await readFile(
+    new URL('../js/procgen/featured/registry.js', import.meta.url), 'utf8');
+  for (const id of EXPLORE_LANDMARK_IDS){
+    if (NEBULA_PROFILE_IDS.includes(id)){
+      assert.ok(nebulaProfile(id), id + ': missing shared object-specific profile');
+      assert.match(registry, /NEBULA_PROFILE_IDS\.map\(id => \[id,/);
+    } else {
+      assert.match(registry, new RegExp(`\\['${id.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}',`),
+        id + ': Explore entry lacks a dedicated renderer');
+    }
+  }
+});
+
+test('every modeled Explore experience opens on 3D rather than an observation plate', () => {
+  const catalog = new Map(LANDMARKS.map(entry => [entry.id, entry]));
+  for (const id of EXPLORE_LANDMARK_IDS){
+    if (id === 'pale-blue-dot') continue;
+    const experience = landmarkExperience(catalog.get(id));
+    const initial = experience.moments.find(moment => moment.id === experience.defaultMoment);
+    assert.ok(initial, id + ': missing default moment');
+    assert.match(initial.kind, /MODEL|RECONSTRUCTION|VISUALIZATION/,
+      id + ': Explore must open on its 3D model');
+    assert.doesNotMatch(initial.kind, /^OBSERVATION|INFRARED OBSERVATION$/,
+      id + ': Explore opened on a flat observation');
+  }
+});
+
+test('black-hole observation chapters preserve a persistent 3D hero', async () => {
+  for (const id of ['cygnus-x-1', 'm87-star', 'sagittarius-a-star', 'gw150914']){
+    const experience = landmarkExperience(LANDMARKS.find(entry => entry.id === id));
+    assert.equal(experience.moments.length, 5, id + ': expected five sourced chapters');
+    const initial = experience.moments.find(moment => moment.id === experience.defaultMoment);
+    assert.equal(initial.kind, 'SCIENTIFIC VISUALIZATION', id + ': default must be the model');
+    assert.ok(experience.moments.some(moment => moment.visual.state === 'observation'),
+      id + ': missing authentic observation chapter');
+    assert.ok(experience.moments.every(moment => /^https:\/\//.test(moment.source)),
+      id + ': every chapter needs a source');
+  }
+
+  const [dock, blackHoles] = await Promise.all([
+    readFile(new URL('../js/procgen/featured/observationDock.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/blackHoles.js', import.meta.url), 'utf8'),
+  ]);
+  assert.match(dock, /sourceIsFlatObservation\s*=\s*true/);
+  assert.match(dock, /modelReplacement\s*=\s*false/);
+  assert.match(dock, /camera\.getWorldQuaternion/);
+  assert.match(blackHoles, /persistentThreeDimensionalModel\s*=\s*true/);
+  assert.match(blackHoles, /modelRoot\.visible\s*=\s*true/);
+  assert.match(blackHoles,
+    /const observation = isObservationMoment\(visual\);[\s\S]{0,160}?observationDock\.setVisible\(observation\)/);
+});
+
+test('black-hole milestones open model-led and retain their evidence sequences', async () => {
+  const gwAlias = LANDMARKS.find(entry => entry.id === 'gw150914-first-gravitational-wave');
+  const gwStory = landmarkExperience(gwAlias);
+  assert.equal(gwStory.defaultMoment, 'gw150914-model');
+  assert.ok(gwStory.moments.some(moment => moment.id === 'gw150914-detection'));
+  const m87Story = LANDMARK_EXPERIENCES['m87-black-hole-image'];
+  assert.equal(m87Story.defaultMoment, 'm87-model');
+  assert.equal(m87Story.moments.length, 7);
+  assert.equal(m87Story.moments[0].visual.state, 'model');
+
+  const [registry, m87, main] = await Promise.all([
+    readFile(new URL('../js/procgen/featured/registry.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/m87.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/main.js', import.meta.url), 'utf8'),
+  ]);
+  assert.match(registry, /function buildM87MilestoneExperience\(/);
+  assert.match(registry,
+    /buildM87StarFeatured\([\s\S]{0,300}?PersistentRelativisticModel/);
+  assert.match(registry, /modelAlwaysVisible:\s*true/);
+  assert.match(registry, /SixStateEvidenceSidecar/);
+  assert.match(registry, /evidenceRoot\.userData\.mixedPresentationSidecar\s*=\s*true/);
+  assert.doesNotMatch(registry, /evidenceRoot\.userData\.observationSidecar\s*=\s*true/);
+  assert.match(registry, /persistent-hero-with-top-evidence-gutter/);
+  assert.match(registry, /evidenceVisible\s*=\s*visual\.state\s*!==\s*'model'/);
+  assert.match(registry, /evidenceRoot\.visible\s*=\s*evidenceVisible/);
+  assert.match(registry, /evidence\.setMoment\(visual\)/);
+  assert.match(registry,
+    /group\.userData\.activeState === M87_STATES\.ARRAY[\s\S]{0,180}?label: 'MODEL \/ EXPLANATORY VIEW'/);
+  assert.match(registry, /Earth albedo: Solar System Scope · CC BY 4\.0/);
+  assert.match(registry,
+    /observationVisible = evidenceVisible && !explanatoryViewVisible/);
+  assert.match(registry,
+    /explanatoryViewVisible[\s\S]{0,300}?'model-plus-explanatory-view'/);
+  assert.match(registry,
+    /group\.userData\.observationVisible[\s\S]{0,220}?label: 'OBSERVATION \+ MODEL'/);
+  assert.match(m87, /imageCredit:\s*EVIDENCE_CREDIT/);
+  assert.match(main,
+    /entry\.id === 'm87-star'[\s\S]{0,260}?candidate\.id === 'm87-black-hole-image'[\s\S]{0,180}?this\.enterLandmark\(archive\)/,
+    'the primary M87* model needs a normal UI path to its six-state archive');
+  for (const state of [
+    'm87-jet-observed', 'm87-core-multiscale', 'eht-array-2017',
+    'eht-total-intensity-2017', 'eht-polarization-2017',
+    'eht-compare-2017-2018',
+  ]) assert.match(m87, new RegExp(`['"]${state}['"]`), state);
+});
+
+test('reprocessed observations and image-less archives expose truthful story states', () => {
+  const paleBlueDot = LANDMARK_EXPERIENCES['pale-blue-dot'];
+  const comparison = paleBlueDot.moments.find(moment =>
+    moment.visual.state === 'pbd-compare-1990-2020');
+  assert.equal(comparison.visual.observation, true,
+    'the real 1990/2020 image comparison must receive observation attribution');
+
+  for (const id of ['kepler-sn-1604', 'vela-remnant', 'betelgeuse']){
+    const entry = LANDMARKS.find(candidate => candidate.id === id);
+    const story = landmarkExperience(entry);
+    const moment = story.moments.find(candidate => candidate.id === story.defaultMoment);
+    assert.equal(story.defaultMoment, 'archive-record', id);
+    assert.match(story.note, /No verified visual asset/, id);
+    assert.equal(moment.kind, 'ARCHIVE RECORD', id);
+    assert.equal(moment.visual.observation, false, id);
+    assert.equal(moment.visual.state, 'archive-record', id);
+    assert.match(moment.text, /No verified visual asset is displayed/, id);
+  }
+});
+
+test('retained modern supernovae use dedicated indexed 3D sculpts plus observations', async () => {
+  assert.deepEqual([...SUPERNOVA_EXPERIENCE_IDS], ['sn-1987a', 'cassiopeia-a']);
+  for (const id of SUPERNOVA_EXPERIENCE_IDS){
+    const entry = LANDMARKS.find(candidate => candidate.id === id);
+    const experience = supernovaExperience(entry);
+    assert.equal(experience.moments.length, 6, id + ': expected six chapters');
+    assert.equal(experience.moments.find(moment => moment.id === experience.defaultMoment).kind,
+      'SCIENTIFIC 3D MODEL', id + ': default must be the 3D model');
+    assert.ok(experience.moments.some(moment => moment.visual.state === 'observation'),
+      id + ': missing real observation chapter');
+    assert.ok(experience.moments.every(moment => /^https:\/\//.test(moment.source)),
+      id + ': missing authoritative source');
+  }
+
+  const sn1987a = supernovaExperience(LANDMARKS.find(entry => entry.id === 'sn-1987a'));
+  assert.equal(sn1987a.moments.find(moment => moment.id === 'sn1987a-hotspots').date,
+    'MID-1990s → 2010s');
+  const casA = supernovaExperience(LANDMARKS.find(entry => entry.id === 'cassiopeia-a'));
+  const casAObservation = casA.moments.find(moment => moment.id === 'casa-observation');
+  assert.equal(casAObservation.date, 'AUGUST 4 · 2022 · JWST MIRI');
+  assert.equal(casAObservation.source,
+    'https://science.nasa.gov/asset/webb/cassiopeia-a-miri-image/');
+
+  const [source, registry] = await Promise.all([
+    readFile(new URL('../js/procgen/featured/supernovae.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/registry.js', import.meta.url), 'utf8'),
+  ]);
+  for (const name of ['buildSN1987AFeatured', 'buildCassiopeiaAFeatured'])
+    assert.match(source, new RegExp(`export function ${name}\\(`), name);
+  assert.match(source, /makeEllipticalTubeGeometry[\s\S]*?geometry\.setIndex\(indices\)/);
+  assert.match(source, /makeAsymmetricShellGeometry[\s\S]*?geometry\.setIndex\(indices\)/);
+  assert.match(source, /new THREE\.InstancedMesh\(/);
+  assert.equal([...source.matchAll(/scope\.own\(new THREE\.InstancedMesh\(/g)].length, 2,
+    'every instanced-mesh factory must register its GPU instance buffer for disposal');
+  assert.match(source, /ring-hotspots[\s\S]*?ejecta-hourglass[\s\S]*?observation/);
+  assert.match(source, /ejecta-elements[\s\S]*?jets-compact-object[\s\S]*?green-monster[\s\S]*?observation/);
+  assert.doesNotMatch(source,
+    /new THREE\.(?:Points|Sprite|Line|LineLoop|LineSegments|PlaneGeometry|TorusGeometry|TubeGeometry)\s*\(/);
+  assert.match(registry, /renderer:\s*'sn1987a-triple-ring-sculpt-v1'/);
+  assert.match(registry, /renderer:\s*'cassiopeia-a-element-sculpt-v1'/);
+  assert.match(registry, /buildRemnantWithObservation[\s\S]*?createObservationDock/);
+});
+
+test('landmark attribution switches between model and authentic observation', async () => {
+  const [view, hud, main, collection, carina] = await Promise.all([
+    readFile(new URL('../js/scenes/landmarkView.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/ui/hud.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/main.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/nebulaCollection.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/carina.js', import.meta.url), 'utf8'),
+  ]);
+  assert.match(view, /currentCredit\(\)/);
+  assert.match(view,
+    /creditForPresentation &&\s*this\.exhibit\.creditForPresentation\(\{ moment, visual \}\)/);
+  assert.match(view, /label:\s*'OBSERVATION \+ MODEL'/);
+  assert.match(view, /if \(this\.modelCredit\) return \{ label:\s*'MODEL'/);
+  assert.match(view, /const explicitObservation\s*=/);
+  assert.match(view, /const inferredObservation\s*=\s*!persistentModel/);
+  assert.match(view, /activePresentation === 'model-plus-source-observation'/);
+  assert.doesNotMatch(view, /fallbackCredit[\s\S]{0,180}?modelCredit/);
+  assert.match(hud, /setLandmarkCredit\(credit\)/);
+  assert.match(main,
+    /this\.landmarkView\.setMoment\(moment\);\s*this\.hud\.setLandmarkCredit\(this\.landmarkView\.currentCredit\(\)\)/);
+  assert.match(main,
+    /visual\.wavelength === 'infrared' \|\|\s*\/infrared\/i\.test\(String\(visual\.state \|\| ''\)\)/,
+    'the wavelength control must resolve Crab’s state-named infrared moment');
+  assert.match(main,
+    /if \(matched\)\{\s*this\.landmarkView\.setMoment\(matched\);\s*this\.hud\.selectStoryMoment\(matched\.id, false\);\s*\}\s*this\.hud\.setLandmarkCredit\(this\.landmarkView\.currentCredit\(\)\)/,
+    'wavelength changes must update both the active semantic moment and its credit');
+  assert.match(collection, /modelCredit:\s*SHARED_NEBULA_MODEL_CREDIT/,
+    'shared nebula model states need an explicit model attribution');
+  assert.match(carina,
+    /creditForPresentation\(\)\{\s*return CARINA_PRESENTATION_CREDITS\[activeState\] \|\| null/);
+  assert.match(carina, /Hubble 2007 Carina mosaic: NASA, ESA, N\. Smith/);
+  assert.match(carina, /Webb Cosmic Cliffs NIRCam \+ MIRI: NASA, ESA, CSA, STScI/);
+  assert.match(carina, /Hubble UV \(March\/July 2018\): NASA, ESA, N\. Smith and J\. Morse/);
+  assert.doesNotMatch(carina, /const MODEL_CREDIT\s*=|modelCredit:\s*MODEL_CREDIT/,
+    'Carina must not use one bundled observation credit for every presentation');
+});
+
+test('observation docks reserve a camera-space gutter around the 3D hero', async () => {
+  const dock = await readFile(
+    new URL('../js/procgen/featured/observationDock.js', import.meta.url), 'utf8');
+  assert.match(dock, /heroRadius\s*=\s*22/);
+  assert.match(dock, /halfHeight\s*=\s*distance\s*\*\s*Math\.tan/);
+  assert.match(dock, /const topGutter\s*=\s*aspect\s*<\s*1\.05/);
+  assert.match(dock, /layoutMode\s*=\s*'portrait-top-gutter'/);
+  assert.match(dock, /layoutMode\s*=\s*'landscape-side-gutter'/);
+  assert.match(dock, /reservedHeroRadius\s*=\s*heroRadius/);
+  assert.doesNotMatch(dock, /offsetX \* horizontalScale/);
+});
+
+test('uncurated nebula and remnant routes never revive generic fuzzy 3D', async () => {
+  const view = await readFile(
+    new URL('../js/scenes/landmarkView.js', import.meta.url), 'utf8');
+  assert.match(view, /group\.userData\.noGenericReconstruction\s*=\s*true/);
+  assert.match(view,
+    /const featured = buildFeaturedExhibit[\s\S]{0,500}?deepSkyArchiveOnly[\s\S]{0,500}?buildArchiveOnly\(entry\)/);
+  assert.match(view, /const galaxyVolume = !!img && entry\.category === 'GALAXY'/);
+  assert.doesNotMatch(view,
+    /\['NEBULA',\s*'SUPERNOVA',\s*'GALAXY'\]\.includes\(entry\.category\)/);
 });
 
 test('shared nebula runtime contains no generic soft-cloud renderer', async () => {
@@ -596,6 +887,37 @@ test('shared nebula runtime contains no generic soft-cloud renderer', async () =
   assert.doesNotMatch(matter, /photo-aligned-chromatic-gas|photo-aligned-foreground-dust/);
   assert.match(matter, /new THREE\.(?:Mesh|InstancedMesh)\s*\(/,
     'photo/depth reconstruction should use crisp surfaces');
+});
+
+test('retained shared nebula heroes use continuous procedural surfaces, not photo fragments', async () => {
+  const [collection, sculptA, sculptB, primitives] = await Promise.all([
+    readFile(new URL('../js/procgen/featured/nebulaCollection.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/nebulaSculptA.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/nebulaSculptB.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/nebulaSculptPrimitives.js', import.meta.url), 'utf8'),
+  ]);
+  for (const family of [
+    'open-bowl', 'edge-ridge', 'planetary-ring', 'double-ring',
+    'star-cavity', 'nested-shell', 'trilobe',
+  ]) assert.match(collection, new RegExp(`['"]${family}['"]`), family);
+  assert.match(collection, /if\s*\(!continuousHero\s*&&\s*!photoRelief\)/,
+    'continuous heroes must not instantiate source-depth relief fragments');
+  assert.match(collection, /projector appears only in the explicit observation state/);
+  assert.match(collection, /presentationState === 'observation'/);
+  assert.match(sculptA, /orion-continuous-ionization-bowl/);
+  assert.match(sculptA, /horsehead-barnard33-authored-silhouette/);
+  assert.match(sculptA, /ring-main-thick-torus/);
+  assert.match(sculptA, /helix-second-inclined-ejection-ring/);
+  assert.match(sculptA, /lagoon-main-foreground-dust-river/);
+  assert.match(sculptB, /cat-eye-continuous-bubble/);
+  assert.match(sculptB, /trifid-occluding-dust-lane/);
+  assert.match(primitives, /new THREE\.BufferGeometry\s*\(/);
+  assert.match(primitives, /continuousNebulaSurface\s*=\s*true/);
+  assert.match(primitives, /opacityUniform\s*=\s*uniforms\.uOpacity/);
+  for (const source of [sculptA, sculptB, primitives]){
+    assert.doesNotMatch(source,
+      /new THREE\.(?:Points|TubeGeometry|TorusGeometry)\s*\(|gl_PointCoord/);
+  }
 });
 
 test('dedicated and shared nebula sculpts contain no active wire or blob layers', async () => {
@@ -622,15 +944,60 @@ test('dedicated and shared nebula sculpts contain no active wire or blob layers'
   assert.match(carina, /hubble\.plate\.material\.opacity\s*=\s*headOn/);
   assert.match(carina, /webb\.plate\.material\.opacity\s*=\s*headOn/);
 
-  assert.equal([...crab.matchAll(/new THREE\.Points\s*\(/g)].length, 3,
-    'Crab Points are limited to two aligned star sets and transient ejecta');
-  assert.equal([...crab.matchAll(/allowedPointRole\s*=/g)].length, 3);
+  assert.equal([...crab.matchAll(/new THREE\.Points\s*\(/g)].length, 0,
+    'Crab uses no particle cloud for its persistent remnant or 1054 state');
   assert.doesNotMatch(crab,
-    /registered-hubble-filament-surfels|registered-webb-cage-surfels|new THREE\.(?:TubeGeometry|TorusGeometry)/);
-  assert.match(crab, /smoothstep\(front,\s*\.9511,\s*\.9990\)/);
-  assert.match(crab, /smoothstep\(0\.0,\s*\.055,\s*vUv\.x\)/);
+    /gl_PointCoord|new THREE\.(?:Sprite|Line|LineLoop|LineSegments|RingGeometry|TorusGeometry|SphereGeometry)\s*\(/);
+  assert.match(crab, /Crab\.FilamentCageIndexedSurface/);
+  assert.match(crab, /Crab\.IndexedTerminationShock/);
+  assert.match(crab, /Crab\.IndexedNorthwestJet/);
+  assert.match(crab, /new THREE\.InstancedMesh\s*\(/);
+  assert.ok([...crab.matchAll(/geometry\.setIndex\s*\(/g)].length >= 5,
+    'Crab must be built from indexed shell, filament, wind and jet surfaces');
+  assert.match(crab, /modelAlwaysVisible:true/);
+  assert.match(crab, /genericImageVolume:false/);
+  for (const asset of [
+    'images/crab/hubble-1999.jpg',
+    'images/crab/hubble-2024.jpg',
+    'images/crab/webb-2023.jpg',
+  ]) assert.match(crab, new RegExp(asset.replaceAll('/', '\\/')));
+  assert.match(crab, /flatScientificSource=true/,
+    'authentic Crab observations stay flat evidence instead of model texture');
   assert.match(main, /exitToGalaxy\(\)\{[\s\S]{0,1200}evictTextures\(\)/,
     'leaving a landmark must evict its cached observation textures');
+});
+
+test('instanced nebula GPU buffers have one explicit lifecycle owner', async () => {
+  const [collection, primitives, sculptA, sculptB, carina] = await Promise.all([
+    readFile(new URL('../js/procgen/featured/nebulaCollection.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/nebulaSculptPrimitives.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/nebulaSculptA.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/nebulaSculptB.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/carina.js', import.meta.url), 'utf8'),
+  ]);
+  const compact = source => source.replace(/\s+/g, ' ');
+  const shared = [primitives, sculptA, sculptB];
+  const constructors = shared.reduce((count, source) =>
+    count + [...source.matchAll(/new THREE\.InstancedMesh\s*\(/g)].length, 0);
+  const registrations = shared.reduce((count, source) =>
+    count + [...compact(source).matchAll(/tracker\.instanced\(\s*new THREE\.InstancedMesh\s*\(/g)].length,
+  0);
+  assert.equal(constructors, 4, 'expected all four shared-nebula instanced factories');
+  assert.equal(registrations, constructors,
+    'every shared-nebula instance buffer must belong to its local tracker');
+  assert.match(collection, /const instancedMeshes = new Set\(\)/);
+  assert.match(collection,
+    /if \(disposed\) return;[\s\S]*?for \(const mesh of instancedMeshes\) mesh\.dispose\(\);[\s\S]*?for \(const geometry of geometries\) geometry\.dispose\(\);/,
+    'instance buffers must be released once before shared geometry/material resources');
+
+  const compactCarina = compact(carina);
+  const carinaConstructors = [...carina.matchAll(/new THREE\.InstancedMesh\s*\(/g)].length;
+  const carinaRegistrations = [
+    ...compactCarina.matchAll(/scope\.own\(\s*new THREE\.InstancedMesh\s*\(/g),
+  ].length;
+  assert.equal(carinaConstructors, 2, 'expected both Carina instanced detail systems');
+  assert.equal(carinaRegistrations, carinaConstructors,
+    'Carina instance buffers must use its idempotent ResourceScope');
 });
 
 test('Pillars respects automatically detected low quality', async () => {
@@ -667,12 +1034,13 @@ test('every shared nebula disables generic blobs and defines crisp unique struct
   }
 });
 
-test('the SN 1054 Crab alias opens the dedicated historical state', () => {
+test('the SN 1054 Crab alias opens on the current high-fidelity remnant model', () => {
   const entry = LANDMARKS.find(landmark => landmark.id === 'crab-nebula-sn-1054');
   const story = landmarkExperience(entry);
-  assert.equal(story.defaultMoment, 'crab-1054');
+  assert.equal(story.defaultMoment, 'crab-pulsar');
   const moment = story.moments.find(candidate => candidate.id === story.defaultMoment);
-  assert.equal(moment.visual.state, 'crab.supernova-flash');
+  assert.equal(moment.visual.state, 'crab.pulsar-engine');
+  assert.equal(moment.kind, 'SCIENTIFIC 3D MODEL');
 });
 
 test('curated field stories have complete, selectable milestones', () => {
@@ -694,7 +1062,7 @@ test('curated field stories have complete, selectable milestones', () => {
 test('dedicated multi-state exhibits route every milestone to a unique state', () => {
   const expectedStates = {
     'm87-black-hole-image': [
-      'm87-jet-observed', 'm87-core-multiscale', 'eht-array-2017',
+      'model', 'm87-jet-observed', 'm87-core-multiscale', 'eht-array-2017',
       'eht-total-intensity-2017', 'eht-polarization-2017', 'eht-compare-2017-2018',
     ],
     'pale-blue-dot': [
@@ -704,7 +1072,7 @@ test('dedicated multi-state exhibits route every milestone to a unique state', (
   };
   for (const id of ['carina-nebula', 'crab-nebula', 'm87-black-hole-image', 'pale-blue-dot']){
     const moments = LANDMARK_EXPERIENCES[id].moments;
-    assert.equal(moments.length, 6, id);
+    assert.equal(moments.length, id === 'm87-black-hole-image' ? 7 : 6, id);
     const states = moments.map(moment => moment.visual.state);
     assert.ok(states.every(Boolean), id + ': missing state');
     assert.equal(new Set(states).size, moments.length, id + ': duplicate state');

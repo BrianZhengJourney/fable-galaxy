@@ -27,7 +27,8 @@ import { Photometer } from './ui/photometer.js';
 import { AudioEngine } from './ui/audio.js';
 import { LandmarkView } from './scenes/landmarkView.js';
 import { LANDMARKS, LANDMARK_CATEGORIES } from './data/landmarks.js';
-import { FEATURED_LANDMARK_IDS, landmarkExperience, bodyExperience } from './data/fieldStories.js';
+import { landmarkExperience, bodyExperience } from './data/fieldStories.js';
+import { EXPLORE_LANDMARK_IDS, EXPLORE_SECTIONS } from './data/exploreSections.js';
 import { DEFAULT_SOL_EPOCH, SOL_EPOCHS, resolveSolEpoch } from './data/solEpochs.js';
 import { evictEarthEpochTextures } from './utils/earthEpochTextures.js';
 import { evictPlanetEpochTextures } from './utils/planetEpochTextures.js';
@@ -280,14 +281,22 @@ class App {
   /* ================= cosmic landmarks ================= */
 
   _wireLandmarks(){
-    this.featuredLandmarks = FEATURED_LANDMARK_IDS
-      .map(id => LANDMARKS.find(e => e.id === id)).filter(Boolean);
-    this.hud.buildLandmarks(this.featuredLandmarks, LANDMARK_CATEGORIES,
-      e => this.enterLandmark(e), { archive: LANDMARKS });
+    const catalog = new Map(LANDMARKS.map(entry => [entry.id, entry]));
+    this.exploreSections = EXPLORE_SECTIONS.map(section => ({
+      ...section,
+      items: section.items.map(item => {
+        const entry = catalog.get(item.id);
+        if (!entry) throw new Error('Explore landmark missing from catalog: ' + item.id);
+        return { ...item, entry };
+      }),
+    }));
+    this.exploreLandmarks = this.exploreSections
+      .flatMap(section => section.items.map(item => item.entry));
+    this.hud.buildLandmarks(this.exploreSections, e => this.enterLandmark(e));
     const btn = document.getElementById('landmarkBtn');
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      document.getElementById('landmarks').classList.toggle('show');
+      this.hud.setLandmarksVisible(!this.hud.landmarksVisible());
     });
     document.getElementById('lmClose').addEventListener('click',
       () => this.hud.setLandmarksVisible(false));
@@ -330,7 +339,7 @@ class App {
       onNext: () => this._landmarkStep(1),
       onExit: () => this.exitLandmark(),
       action: this._landmarkAction(entry),
-      credit: this.landmarkView.imageCredit,
+      credit: this.landmarkView.currentCredit(),
       experience,
       wavelength: this.landmarkView.hasIR ? on => this._setLandmarkWavelength(on) : null
     });
@@ -354,8 +363,8 @@ class App {
 
   _landmarkStep(dir){
     const current = this.landmarkView && this.landmarkView.entry;
-    const sequence = current && FEATURED_LANDMARK_IDS.includes(current.id)
-      ? this.featuredLandmarks : LANDMARKS;
+    const sequence = current && EXPLORE_LANDMARK_IDS.includes(current.id)
+      ? this.exploreLandmarks : LANDMARKS;
     const at = Math.max(0, sequence.indexOf(current));
     const i = ((at + dir) % sequence.length + sequence.length) % sequence.length;
     this.enterLandmark(sequence[i]);
@@ -367,14 +376,23 @@ class App {
     this.hud.setLandmarkWavelength(on);
     const experience = landmarkExperience(this.landmarkView.entry);
     const matched = on
-      ? experience.moments.find(moment => moment.visual && moment.visual.wavelength === 'infrared')
+      ? experience.moments.find(moment => {
+        const visual = moment.visual || {};
+        return visual.wavelength === 'infrared' ||
+          /infrared/i.test(String(visual.state || ''));
+      })
       : experience.moments.find(moment => moment.id === experience.defaultMoment);
-    if (matched) this.hud.selectStoryMoment(matched.id, false);
+    if (matched){
+      this.landmarkView.setMoment(matched);
+      this.hud.selectStoryMoment(matched.id, false);
+    }
+    this.hud.setLandmarkCredit(this.landmarkView.currentCredit());
   }
 
   _applyLandmarkMoment(moment){
     if (!this.landmarkView || !moment) return;
     this.landmarkView.setMoment(moment);
+    this.hud.setLandmarkCredit(this.landmarkView.currentCredit());
     const visual = moment.visual || {};
     if (visual.wavelength) this.hud.setLandmarkWavelength(visual.wavelength === 'infrared');
     const factor = visual.distance == null ? 1 : visual.distance;
@@ -414,6 +432,13 @@ class App {
 
   /* some landmarks can be experienced in-scene (jump the Sol clock to the date) */
   _landmarkAction(entry){
+    if (entry.id === 'm87-star'){
+      const archive = LANDMARKS.find(candidate => candidate.id === 'm87-black-hole-image');
+      return archive ? {
+        label: '▸ OPEN DISCOVERY ARCHIVE',
+        cb: () => this.enterLandmark(archive),
+      } : null;
+    }
     if (entry.category !== 'SOLAR_EVENT') return null;
     const simDays = this._parseLandmarkDate(entry.date);
     if (simDays == null) return null;
@@ -842,7 +867,14 @@ class App {
     const viewScale = s.cfg.blackhole ? 13 : 4.5;
     this.rig.minDist = s.cfg.coreRadius * detailScale;
     this.rig.flyTo({ getTarget: () => ORIGIN, dist: s.cfg.coreRadius * viewScale, dur: 1.25 });
-    this.hud.showPanel('STELLAR LOCK', s.cfg.name, s.cfg.cls, s.cfg.info);
+    const archive = s.cfg.name === 'SAGITTARIUS A*'
+      ? LANDMARKS.find(entry => entry.id === 'sagittarius-a-star')
+      : null;
+    const action = archive ? {
+      label: '▸ OPEN DISCOVERY ARCHIVE',
+      cb: () => this.enterLandmark(archive),
+    } : null;
+    this.hud.showPanel('STELLAR LOCK', s.cfg.name, s.cfg.cls, s.cfg.info, action);
     if (this.systemRec && this.systemRec.sol)
       this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId));
     this._crumbs();
@@ -992,6 +1024,13 @@ class App {
   }
 
   _onKey(e){
+    if (this.hud.landmarksVisible()){
+      if (e.key === 'Escape'){
+        e.preventDefault();
+        this.hud.setLandmarksVisible(false);
+      }
+      return;
+    }
     if (e.code === 'Space'){
       e.preventDefault();
       if (document.body.classList.contains('story-mode')) return;

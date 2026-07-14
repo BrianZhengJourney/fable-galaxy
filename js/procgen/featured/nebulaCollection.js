@@ -15,6 +15,10 @@ import { buildNebulaSculptA } from './nebulaSculptA.js';
 import { buildNebulaSculptB } from './nebulaSculptB.js';
 
 const DISPLAY_HEIGHT = 62;
+const CONTINUOUS_HERO_FAMILIES = new Set([
+  'open-bowl', 'edge-ridge', 'planetary-ring', 'double-ring',
+  'star-cavity', 'nested-shell', 'trilobe',
+]);
 
 const QUALITY = Object.freeze({
   low: Object.freeze({
@@ -90,19 +94,24 @@ function solidTexture(color){
 
 function makeTracker(){
   const textures = new Set(), materials = new Set(), geometries = new Set();
+  const instancedMeshes = new Set();
   let disposed = false;
   return {
     texture(value){ if (value) textures.add(value); return value; },
     material(value){ if (value) materials.add(value); return value; },
     geometry(value){ if (value) geometries.add(value); return value; },
+    instanced(value){ if (value) instancedMeshes.add(value); return value; },
     get disposed(){ return disposed; },
     dispose(){
       if (disposed) return;
       disposed = true;
+      // InstancedMesh owns renderer-side instanceMatrix/instanceColor buffers;
+      // its shared geometry and material remain separately owned below.
+      for (const mesh of instancedMeshes) mesh.dispose();
       for (const geometry of geometries) geometry.dispose();
       for (const material of materials) material.dispose();
       for (const texture of textures) texture.dispose();
-      geometries.clear(); materials.clear(); textures.clear();
+      instancedMeshes.clear(); geometries.clear(); materials.clear(); textures.clear();
     },
   };
 }
@@ -308,21 +317,30 @@ function setFamilyReveal(root, reveal){
       ? object.material : object.material ? [object.material] : [];
     for (const material of materials){
       const base = material.userData && material.userData.baseOpacity;
-      if (Number.isFinite(base)) material.opacity = base * reveal;
+      if (Number.isFinite(base)){
+        const opacity=base*reveal;
+        material.opacity=opacity;
+        const uniform=material.userData && material.userData.opacityUniform;
+        if(uniform) uniform.value=opacity;
+      }
     }
   });
 }
 
-/* Compose one exact catalog photograph, a source/depth-aligned triangulated
-   relief, and a recipe-driven morphology layer. Off-axis structure stays
-   legible because weak pixels become literal holes between hard mesh patches,
-   not translucent layers or an extruded photograph. */
+const SHARED_NEBULA_MODEL_CREDIT =
+  'Scientific 3D reconstruction · morphology is source-informed; off-axis depth and fine structure are interpretive';
+
+/* Compose one exact catalog photograph and a recipe-driven morphology layer.
+   The seven model-first heroes use only continuous procedural surfaces once
+   the camera leaves the observation axis. Veil/Rosette retain their authored
+   source-registered relief because their morphology is a projected sheet. */
 export function buildNebulaCollectionFeatured({ entry, image }){
   if (!entry || !entry.id) throw new TypeError('Nebula collection requires an entry');
   if (!image || !image.file)
     throw new Error(entry.id + ': visible observation image is required');
   const profile = nebulaProfile(entry.id);
   if (!profile) throw new Error(entry.id + ': missing nebula profile');
+  const continuousHero=CONTINUOUS_HERO_FAMILIES.has(profile.family);
 
   const tier = detectTier().tier === 'low' ? 'low' : 'high';
   const budget = QUALITY[tier];
@@ -331,19 +349,22 @@ export function buildNebulaCollectionFeatured({ entry, image }){
   group.name = `nebula-collection:${entry.id}`;
   let disposed = false;
   let time = 0;
-  let reveal = 0;
-  let projectorOpacity = 1;
+  let reveal = 1;
+  let projectorOpacity = 0;
+  let presentationState = 'model';
   let alignedStars = null;
   let photoRelief = null;
   let pendingDepth = null;
 
   const fallback = tracker.texture(solidTexture(0x11111b));
   const projector = buildProjector(group, fallback, tracker);
-  const starReveal = { value: 0 };
+  const starReveal = { value: 1 };
   const family = buildFamilyLayer(group, profile, budget, tracker,
     `nebula-family:${entry.id}`);
-  setFamilyReveal(family, 0);
-  family.visible = false;
+  setFamilyReveal(family, 1);
+  family.visible = true;
+  projector.uniforms.uOpacity.value=0;
+  projector.mesh.visible=false;
 
   function attachPhotoRelief(source, depthImage, aspect){
     if (disposed || !source) return;
@@ -352,7 +373,7 @@ export function buildNebulaCollectionFeatured({ entry, image }){
         budget, tracker, starReveal, `nebula-stars:${entry.id}`);
       if (alignedStars) alignedStars.visible = reveal > .002;
     }
-    if (!photoRelief){
+    if (!continuousHero && !photoRelief){
       photoRelief = buildPhotoRelief({
         parent: group,
         image: source,
@@ -398,18 +419,21 @@ export function buildNebulaCollectionFeatured({ entry, image }){
     group.userData.observationAspect = aspect;
   });
 
-  group.userData.renderer = 'nebula-photo-sculpt-v2';
+  group.userData.renderer = 'nebula-model-first-sculpt-v3';
   group.userData.family = profile.family;
   group.userData.qualityTier = tier;
   group.userData.qualityBudget = { ...budget };
   group.userData.source = profile.source || null;
   group.userData.sources = profile.sources || null;
   group.userData.genericSoftClouds = false;
+  group.userData.continuousHero = continuousHero;
+  group.userData.photoFragmentsInHero = continuousHero ? false : 'registered-sheet-only';
   group.userData.reconstruction = profile.reconstruction || null;
   group.userData.scientificCaveat = profile.caveat ||
     'Depth and off-axis structure are an interpretive visualization, not tomography.';
   group.userData.observationPolicy =
-    'Exact source RGB projector head-on; inferred spatial reconstruction appears only off-axis.';
+    'The exact source RGB projector appears only in the explicit observation state; model states always show inferred 3D.';
+  group.userData.observationRequested=false;
 
   const cameraConfig = profile.camera || {};
   const revealAngles = profile.reconstruction &&
@@ -433,6 +457,25 @@ export function buildNebulaCollectionFeatured({ entry, image }){
     autoRotate: false,
     hasIR: false,
     isImage: true,
+    modelCredit: SHARED_NEBULA_MODEL_CREDIT,
+    setMoment(visual){
+      const observation=visual && (visual.state === 'observation' ||
+        visual.observation === true);
+      presentationState=observation?'observation':'model';
+      group.userData.observationRequested=observation;
+      group.userData.activePresentation=observation
+        ? 'source-observation' : 'scientific-3d-model';
+      if(!observation){
+        reveal=1;
+        starReveal.value=1;
+        family.visible=true;
+        family.scale.z=1;
+        setFamilyReveal(family,1);
+        projectorOpacity=0;
+        projector.uniforms.uOpacity.value=0;
+        projector.mesh.visible=false;
+      }
+    },
     update(dt, camera){
       if (disposed) return;
       dt = Math.min(Math.max(Number(dt) || 0, 0), .05);
@@ -447,7 +490,8 @@ export function buildNebulaCollectionFeatured({ entry, image }){
         // is exact only close to its camera, then fully yields to geometry.
         // This prevents a rectangular photograph from surviving at oblique
         // angles while preserving pixel-for-pixel registration head-on.
-        const observationTarget = smoothstep(observationStart, observationFull, front);
+        const observationTarget = presentationState === 'observation'
+          ? smoothstep(observationStart, observationFull, front) : 0;
         const revealTarget = 1 - observationTarget;
         reveal = damp(reveal, revealTarget, 4.2, dt);
         projectorOpacity = damp(projectorOpacity, observationTarget, 5.6, dt);

@@ -1,6 +1,6 @@
-/* Dedicated, image-free black-hole landmarks.  The compact object and its
-   relativistic light paths come from the shared black-hole visual; the larger
-   geometry explains what makes each real system observationally distinct. */
+/* Dedicated, model-led black-hole landmarks. The compact object and its
+   relativistic light paths come from the shared black-hole visual; real source
+   products can appear alongside that persistent 3D model as evidence docks. */
 
 import * as THREE from 'three';
 import {
@@ -15,6 +15,7 @@ import {
 } from '../../data/sStars.js';
 import { TEX_TIER } from '../../core/quality.js';
 import { buildGravWave } from '../exhibits.js';
+import { createObservationDock } from './observationDock.js';
 
 const TAU = Math.PI * 2;
 const HALF_PI = Math.PI / 2;
@@ -28,6 +29,9 @@ const LANDMARK_CONFIG = Object.freeze({
     focusDist: 92,
     context: 'blue-supergiant-companion-and-mass-transfer-stream',
     credit: 'Procedural 3D model · Cygnus X-1 companion-fed accretion geometry is qualitative',
+    observation: Object.freeze({
+      width: 26, offsetX: -28, offsetY: 8, accent: 0x79bcff, heroRadius: 22,
+    }),
   }),
   'm87-star': Object.freeze({
     profile: 'm87',
@@ -35,6 +39,9 @@ const LANDMARK_CONFIG = Object.freeze({
     focusDist: 108,
     context: 'relativistic-core-and-bipolar-jet',
     credit: 'Procedural 3D model · M87* lensing and polar-jet scales are qualitative',
+    observation: Object.freeze({
+      width: 27, offsetX: 29, offsetY: 9, accent: 0xffb766, heroRadius: 26,
+    }),
   }),
   'sagittarius-a-star': Object.freeze({
     profile: 'sagittarius-a',
@@ -42,11 +49,25 @@ const LANDMARK_CONFIG = Object.freeze({
     focusDist: 105,
     context: 'quiescent-core-and-s-star-orbits',
     credit: 'Procedural 3D model · Sagittarius A* lensing and S-star orbit scales are illustrative',
+    observation: Object.freeze({
+      width: 27, offsetX: 28, offsetY: 8, accent: 0xffc77c, heroRadius: 25,
+    }),
   }),
 });
 
+const GW150914_IDS = new Set([
+  'gw150914',
+  'gw150914-first-gravitational-wave',
+]);
+
 function clampStep(dt){
   return THREE.MathUtils.clamp(Number.isFinite(dt) ? dt : 0, 0, 0.1);
+}
+
+function isObservationMoment(visual){
+  if (!visual) return false;
+  if (typeof visual === 'string') return visual === 'observation';
+  return visual.observation === true || visual.state === 'observation';
 }
 
 function makeResourceBag(){
@@ -582,7 +603,7 @@ function createSagittariusContext(group, core, profile, resources){
   };
 }
 
-function buildRealBlackHole(entry, config){
+function buildRealBlackHole(entry, config, image){
   if (!entry || entry.id !== Object.keys(LANDMARK_CONFIG)
     .find(id => LANDMARK_CONFIG[id] === config))
     throw new Error('Black-hole landmark config does not match entry');
@@ -597,6 +618,14 @@ function buildRealBlackHole(entry, config){
   group.userData.profileLabel = profile.label;
   group.userData.contextRole = config.context;
   group.userData.flatSourceImage = false;
+  group.userData.modelAlwaysVisible = true;
+  group.userData.observationPolicy =
+    'source image is a flat sidecar; explanatory 3D model remains visible';
+
+  const modelRoot = new THREE.Group();
+  modelRoot.name = `BlackHoleLandmark.${entry.id}.PersistentModel`;
+  modelRoot.userData.persistentThreeDimensionalModel = true;
+  group.add(modelRoot);
 
   const core = createBlackHoleVisual({
     profile,
@@ -606,19 +635,37 @@ function buildRealBlackHole(entry, config){
   });
   core.group.userData.landmarkEntryId = entry.id;
   core.group.userData.landmarkContext = config.context;
-  group.add(core.group);
+  modelRoot.add(core.group);
 
   let context;
   if (entry.id === 'cygnus-x-1')
-    context = createCygnusContext(group, core, profile, resources);
+    context = createCygnusContext(modelRoot, core, profile, resources);
   else if (entry.id === 'm87-star')
-    context = createM87Context(group, core, profile, resources);
+    context = createM87Context(modelRoot, core, profile, resources);
   else
-    context = createSagittariusContext(group, core, profile, resources);
+    context = createSagittariusContext(modelRoot, core, profile, resources);
+
+  const observationDock = createObservationDock({
+    image,
+    name: `BlackHoleLandmark.${entry.id}.ObservationDock`,
+    ...config.observation,
+  });
+  group.add(observationDock.group);
 
   let elapsed = 0;
   let disposed = false;
   context.update(0, elapsed);
+
+  function setMoment(visual){
+    if (disposed) return;
+    const observation = isObservationMoment(visual);
+    modelRoot.visible = true;
+    observationDock.setVisible(observation);
+    group.userData.activePresentation = observation
+      ? 'model-plus-source-observation'
+      : 'three-dimensional-model';
+  }
+  setMoment({ state: 'model' });
 
   return {
     group,
@@ -627,18 +674,22 @@ function buildRealBlackHole(entry, config){
     startPhi: HALF_PI,
     autoRotate: false,
     isImage: false,
-    imageCredit: config.credit,
+    modelCredit: config.credit,
+    setMoment,
     update(dt, camera){
       if (disposed) return;
       const step = clampStep(dt);
       elapsed = (elapsed + step) % 8192;
+      modelRoot.visible = true;
       core.update(step, camera);
       context.update(step, elapsed);
+      observationDock.update(step, camera);
     },
     dispose(){
       if (disposed) return;
       disposed = true;
       group.userData.disposed = true;
+      observationDock.dispose();
       core.dispose();
       resources.dispose();
       group.removeFromParent();
@@ -647,54 +698,91 @@ function buildRealBlackHole(entry, config){
   };
 }
 
-export function buildCygnusX1Featured({ entry }){
-  return buildRealBlackHole(entry, LANDMARK_CONFIG['cygnus-x-1']);
+export function buildCygnusX1Featured({ entry, image }){
+  return buildRealBlackHole(entry, LANDMARK_CONFIG['cygnus-x-1'], image);
 }
 
-export function buildM87StarFeatured({ entry }){
-  return buildRealBlackHole(entry, LANDMARK_CONFIG['m87-star']);
+export function buildM87StarFeatured({ entry, image }){
+  return buildRealBlackHole(entry, LANDMARK_CONFIG['m87-star'], image);
 }
 
-export function buildSagittariusAStarFeatured({ entry }){
-  return buildRealBlackHole(entry, LANDMARK_CONFIG['sagittarius-a-star']);
+export function buildSagittariusAStarFeatured({ entry, image }){
+  return buildRealBlackHole(entry, LANDMARK_CONFIG['sagittarius-a-star'], image);
 }
 
-export function buildBlackHoleFeatured({ entry }){
+export function buildBlackHoleFeatured({ entry, image }){
   const config = entry && LANDMARK_CONFIG[entry.id];
   if (!config) throw new Error((entry && entry.id || 'unknown') + ': no black-hole profile');
-  return buildRealBlackHole(entry, config);
+  return buildRealBlackHole(entry, config, image);
 }
 
 /* A featured route is intentional here even though the existing procedural
    merger remains the renderer: it prevents the archive JPEG from replacing
    the animated inspiral in LandmarkView. */
-export function buildGW150914Featured({ entry }){
-  if (!entry || entry.id !== 'gw150914')
+export function buildGW150914Featured({ entry, image }){
+  if (!entry || !GW150914_IDS.has(entry.id))
     throw new Error('GW150914 featured wrapper requires the gw150914 entry');
   const delegate = buildGravWave(entry);
-  const group = delegate.group;
+  const modelRoot = delegate.group;
+  modelRoot.name = `BlackHoleMerger.${entry.id}.PersistentModel`;
+  modelRoot.userData.persistentThreeDimensionalModel = true;
+  const group = new THREE.Group();
   group.name = 'BlackHoleMerger.GW150914';
   group.userData.blackHoleMerger = true;
   group.userData.entryId = entry.id;
   group.userData.contextRole = 'binary-black-hole-inspiral-and-wavefronts';
   group.userData.flatSourceImage = false;
+  group.userData.modelAlwaysVisible = true;
+  group.userData.observationPolicy =
+    'detector figure is a flat sidecar; explanatory 3D merger remains visible';
+  group.add(modelRoot);
+  const observationDock = createObservationDock({
+    image,
+    name: `BlackHoleMerger.${entry.id}.ObservationDock`,
+    width: 27,
+    offsetX: 24,
+    offsetY: 10,
+    accent: 0x93b8ff,
+    heroRadius: 25,
+  });
+  group.add(observationDock.group);
   let disposed = false;
+
+  function setMoment(visual){
+    if (disposed) return;
+    const observation = isObservationMoment(visual);
+    modelRoot.visible = true;
+    observationDock.setVisible(observation);
+    group.userData.activePresentation = observation
+      ? 'model-plus-source-observation'
+      : 'three-dimensional-model';
+  }
+  setMoment({ state: 'model' });
+
   return {
     ...delegate,
+    group,
     startTheta: 0.38,
     startPhi: 1.05,
     autoRotate: false,
     isImage: false,
-    imageCredit: 'Procedural 3D model · GW150914 inspiral timing and scale are illustrative',
+    modelCredit: 'Procedural 3D model · GW150914 inspiral timing and scale are illustrative',
+    setMoment,
     update(dt, camera){
-      if (!disposed && typeof delegate.update === 'function')
-        delegate.update(clampStep(dt), camera);
+      if (disposed) return;
+      const step = clampStep(dt);
+      modelRoot.visible = true;
+      if (typeof delegate.update === 'function') delegate.update(step, camera);
+      observationDock.update(step, camera);
     },
     dispose(){
       if (disposed) return;
       disposed = true;
       group.userData.disposed = true;
+      observationDock.dispose();
       if (typeof delegate.dispose === 'function') delegate.dispose();
+      group.removeFromParent();
+      group.clear();
     },
   };
 }

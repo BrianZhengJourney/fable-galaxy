@@ -121,63 +121,149 @@ export class Hud {
 
   setSector(name){ $('roSector').textContent = name; }
 
-  /* ---- cosmic landmarks catalog + story card ---- */
-  buildLandmarks(entries, categories, onPick, options = {}){
-    this._featuredLandmarks = entries;
-    this._archiveLandmarks = options.archive || entries;
-    this._landmarkCategories = categories;
+  /* ---- curated cosmic landmarks catalog + story card ---- */
+  buildLandmarks(sections, onPick){
+    this._landmarkSections = sections;
     this._landmarkPick = onPick;
-    this._landmarkArchiveOpen = false;
-    const toggle = $('lmArchiveToggle');
-    toggle.onclick = () => {
-      this._landmarkArchiveOpen = !this._landmarkArchiveOpen;
-      this._renderLandmarks();
+    const panel = $('landmarks');
+    panel.onkeydown = event => {
+      if (event.key === 'Escape'){
+        event.preventDefault();
+        event.stopPropagation();
+        this.setLandmarksVisible(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...panel.querySelectorAll('button:not([disabled])')]
+        .filter(button => button.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first){
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last){
+        event.preventDefault(); first.focus();
+      }
     };
     this._renderLandmarks();
   }
   _renderLandmarks(){
     const list = $('lmList');
+    const nav = $('lmSectionNav');
     list.innerHTML = '';
-    const entries = this._landmarkArchiveOpen ? this._archiveLandmarks : this._featuredLandmarks;
-    const groups = this._landmarkArchiveOpen
-      ? this._landmarkCategories.map(cat => ({ cat, entries: entries.filter(e => e.category === cat.key) }))
-      : [{ cat: null, entries }];
-    for (const group of groups){
-      if (!group.entries.length) continue;
-      if (group.cat){
-        const h = document.createElement('div');
-        h.className = 'lm-cat'; h.textContent = group.cat.label;
-        h.style.color = group.cat.color;
-        list.appendChild(h);
-      }
+    nav.innerHTML = '';
+    let total = 0;
+
+    for (const [sectionIndex, section] of this._landmarkSections.entries()){
+      if (!section.items.length) continue;
+      total += section.items.length;
+      const sectionId = 'explore-' + section.id;
+
+      const jump = document.createElement('button');
+      jump.type = 'button';
+      jump.textContent = section.label;
+      jump.setAttribute('aria-controls', sectionId);
+      jump.addEventListener('click', () => {
+        const target = document.getElementById(sectionId);
+        if (target) target.scrollIntoView({ block: 'start' });
+      });
+      nav.appendChild(jump);
+
+      const sectionElement = document.createElement('section');
+      sectionElement.className = 'lm-section';
+      sectionElement.id = sectionId;
+      sectionElement.style.setProperty('--lm-accent', section.color);
+
+      const heading = document.createElement('header');
+      heading.className = 'lm-section-head';
+      const index = document.createElement('span');
+      index.className = 'lm-section-index';
+      index.textContent = String(sectionIndex + 1).padStart(2, '0') + ' · ' + section.kicker;
+      const title = document.createElement('h3');
+      title.textContent = section.label;
+      const count = document.createElement('span');
+      count.className = 'lm-section-count';
+      count.textContent = section.items.length + (section.items.length === 1 ? ' EXPERIENCE' : ' EXPERIENCES');
+      const intro = document.createElement('p');
+      intro.textContent = section.intro;
+      heading.appendChild(index);
+      heading.appendChild(title);
+      heading.appendChild(count);
+      heading.appendChild(intro);
+      sectionElement.appendChild(heading);
+
       const grid = document.createElement('div');
       grid.className = 'lm-grid';
-      for (const e of group.entries){
+      for (const record of section.items){
+        const e = record.entry;
         const item = document.createElement('button');
-        item.type = 'button'; item.className = 'lm-item';
+        item.type = 'button';
+        item.className = 'lm-item';
+        item.dataset.landmark = e.id;
+        item.setAttribute('aria-label', 'Explore ' + e.name);
         const img = landmarkImage(e.id);
         if (img){
           item.classList.add('has-image');
           const imageURL = new URL(img.file, document.baseURI).href;
           item.style.setProperty('--lm-image', `url("${imageURL}")`);
+          item.style.setProperty('--lm-image-position', record.imagePosition || 'center');
         }
+
+        const badges = document.createElement('span');
+        badges.className = 'lm-badges';
+        for (const text of record.badges){
+          const badge = document.createElement('span');
+          badge.textContent = text;
+          badges.appendChild(badge);
+        }
+        const copy = document.createElement('span');
+        copy.className = 'lm-item-copy';
         const n = document.createElement('span'); n.className = 'n'; n.textContent = e.name;
         const s = document.createElement('span'); s.className = 's';
-        s.textContent = e.subtitle || e.designation;
-        item.appendChild(n); item.appendChild(s);
+        s.textContent = e.designation;
+        copy.appendChild(n); copy.appendChild(s);
+        item.appendChild(badges); item.appendChild(copy);
         item.addEventListener('click', () => this._landmarkPick(e));
         grid.appendChild(item);
       }
-      list.appendChild(grid);
+      sectionElement.appendChild(grid);
+      list.appendChild(sectionElement);
     }
-    $('lmCount').textContent = this._landmarkArchiveOpen
-      ? this._archiveLandmarks.length + ' ARCHIVE OBJECTS'
-      : this._featuredLandmarks.length + ' FIELD STORIES';
-    $('lmArchiveToggle').textContent = this._landmarkArchiveOpen
-      ? '← FEATURED STORIES'
-      : 'VIEW FULL ARCHIVE · ' + this._archiveLandmarks.length;
+    $('lmCount').textContent = total + ' CURATED EXPERIENCES';
   }
-  setLandmarksVisible(on){ $('landmarks').classList.toggle('show', on); }
+  landmarksVisible(){ return $('landmarks').classList.contains('show'); }
+  setLandmarksVisible(on){
+    const panel = $('landmarks');
+    const button = $('landmarkBtn');
+    const visible = !!on;
+    if (visible === this.landmarksVisible()) return;
+    if (visible){
+      this._landmarkReturnFocus = document.activeElement;
+      this._exploreSiblingInert = new Map();
+      for (const sibling of document.body.children){
+        if (sibling === panel || sibling.tagName === 'SCRIPT') continue;
+        this._exploreSiblingInert.set(sibling, sibling.hasAttribute('inert'));
+        sibling.setAttribute('inert', '');
+      }
+    }
+    panel.classList.toggle('show', visible);
+    document.body.classList.toggle('explore-open', visible);
+    button.setAttribute('aria-expanded', String(visible));
+    setInteractive(panel, visible);
+    if (visible){
+      $('lmList').scrollTop = 0;
+      requestAnimationFrame(() => $('lmClose').focus());
+    } else {
+      for (const [sibling, wasInert] of this._exploreSiblingInert || []){
+        if (sibling.isConnected) sibling.toggleAttribute('inert', wasInert);
+      }
+      this._exploreSiblingInert = null;
+      if (this._landmarkReturnFocus instanceof HTMLElement &&
+          this._landmarkReturnFocus.isConnected){
+        this._landmarkReturnFocus.focus();
+      }
+      this._landmarkReturnFocus = null;
+    }
+  }
 
   showLandmarkCard(e, cat, handlers){
     const experience = handlers.experience || null;
@@ -195,7 +281,7 @@ export class Hud {
     $('lmCardFact').textContent = e.wow || '';
     $('lmCardStory').textContent = e.story || '';
     $('lmCardNote').textContent = experience ? experience.note || '' : '';
-    $('lmCardCredit').textContent = handlers.credit ? 'IMAGE · ' + handlers.credit : '';
+    this.setLandmarkCredit(handlers.credit);
     const card = $('lmCard'), details = $('lmCardDetails'), more = $('lmMore');
     card.classList.remove('expanded');
     setInteractive(details, false);
@@ -228,6 +314,15 @@ export class Hud {
     $('lmExit').onclick = handlers.onExit;
     card.classList.add('show');
     setInteractive(card, true);
+  }
+  setLandmarkCredit(credit){
+    const node = $('lmCardCredit');
+    if (!credit){ node.textContent = ''; return; }
+    if (typeof credit === 'string'){
+      node.textContent = 'IMAGE · ' + credit;
+      return;
+    }
+    node.textContent = (credit.label || 'SOURCE') + ' · ' + (credit.text || '');
   }
   setLandmarkWavelength(ir){
     this._landmarkIR = !!ir;

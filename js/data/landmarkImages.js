@@ -11,7 +11,7 @@ export const LANDMARK_IMAGES = {
   'horsehead-nebula': { file: I + 'horsehead-nebula.jpg', credit: "Ken Crawford, Rancho Del Sol Observatory \u00b7 CC BY-SA 3.0" },
   'ring-nebula': { file: I + 'ring-nebula.jpg', credit: "NASA, ESA, and the Hubble Heritage Team (STScI/AURA)" },
   'helix-nebula': { file: I + 'helix-nebula.jpg', credit: "NASA, ESA, C.R. O'Dell (Vanderbilt), M. Meixner, P. McCullough (STScI)" },
-  'lagoon-nebula': { file: I + 'lagoon-nebula.jpg', credit: "ESO \u00b7 CC BY 4.0" },
+  'lagoon-nebula': { file: I + 'lagoon-nebula.jpg', credit: "ESO/IDA/Danish 1.5 m, R. Gendler, U.G. Jørgensen, K. Harpsøe · CC BY 4.0" },
   'cats-eye-nebula': { file: I + 'cats-eye-nebula.jpg', credit: "J.P. Harrington and K.J. Borkowski (University of Maryland), and NASA/ESA" },
   'rosette-nebula': { file: I + 'rosette-nebula.jpg', credit: "NASA/ESA, the DSS-II and GSC-II Consortia (with images from the 'Palomar Observatory-STScI Digital Sky Survey of the northern sky, based on scans of the Second Palomar Sky Survey are copyright ) 1993-1999 by the California Institute of Technology)" },
   'trifid-nebula': { file: I + 'trifid-nebula.jpg', credit: "ESO \u00b7 CC BY 4.0" },
@@ -41,4 +41,10 @@ export const LANDMARK_IMAGES = {
   'halleys-comet': { file: I + 'halleys-comet.jpg', credit: "ESO \u00b7 CC BY 4.0" },
 };
 
-export function landmarkImage(id){ return LANDMARK_IMAGES[id] || null; }
+const LANDMARK_IMAGE_ALIASES = Object.freeze({
+  'gw150914-first-gravitational-wave': 'gw150914',
+});
+
+export function landmarkImage(id){
+  return LANDMARK_IMAGES[id] || LANDMARK_IMAGES[LANDMARK_IMAGE_ALIASES[id]] || null;
+}

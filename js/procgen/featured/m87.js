@@ -95,7 +95,7 @@ const CLUSTER_COLORS = Object.freeze({
   'SOUTH POLE': 0x8ebdff,
 });
 
-const MODEL_CREDIT = [
+const EVIDENCE_CREDIT = [
   'M87 jet: NASA, ESA, A. Lessing, E. Baltz, M. Shara, J. DePasquale',
   'multiscale/polarization: EHT Collaboration et al.',
   '2018 representative map: EHT Collaboration, A&A 681 A79 · CC BY 4.0',
@@ -1184,7 +1184,7 @@ export function buildM87Featured(){
     autoRotate: false,
     hasIR: false,
     isImage: true,
-    modelCredit: MODEL_CREDIT,
+    imageCredit: EVIDENCE_CREDIT,
     setMoment(visual){
       if (!disposed && visual) selectState(visual);
     },

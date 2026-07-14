@@ -3,6 +3,9 @@
    milestones that may mix observations, evidence and model forecasts. */
 
 import { NEBULA_PROFILE_IDS } from './nebulaProfiles.js';
+import { nebulaModelExperience } from './nebulaExperiences.js';
+import { supernovaExperience } from './supernovaExperiences.js';
+import { landmarkImage } from './landmarkImages.js';
 
 const MODELED_BLACK_HOLE_IDS = new Set([
   'cygnus-x-1',
@@ -11,6 +14,11 @@ const MODELED_BLACK_HOLE_IDS = new Set([
   'gw150914',
   'gw150914-first-gravitational-wave',
 ]);
+
+const LANDMARK_EXPERIENCE_ALIASES = Object.freeze({
+  'crab-nebula-sn-1054': 'crab-nebula',
+  'gw150914-first-gravitational-wave': 'gw150914',
+});
 
 export const FEATURED_LANDMARK_IDS = [
   'pillars-of-creation',
@@ -23,11 +31,11 @@ export const FEATURED_LANDMARK_IDS = [
 export const LANDMARK_EXPERIENCES = {
   'pillars-of-creation': {
     summary: 'A stellar nursery seen across deep time and new wavelengths.',
-    defaultMoment: 'hubble-1995',
+    defaultMoment: 'carved',
     note: 'Observation dates, light-travel context and forecasts share this rail. The fly-around depth is a scientific visualization, not a captured 3D image.',
     moments: [
       {
-        id: 'carved', date: 'MILLIONS OF YEARS AGO', kind: 'RECONSTRUCTION',
+        id: 'carved', date: 'MILLIONS OF YEARS AGO', kind: 'SCIENTIFIC 3D RECONSTRUCTION',
         title: 'STARLIGHT CARVES THE CLOUD',
         text: 'Young stars erode thinner gas, leaving dense columns behind.',
         source: 'https://www.eso.org/public/news/eso1518/',
@@ -72,13 +80,13 @@ export const LANDMARK_EXPERIENCES = {
   },
   'carina-nebula': {
     summary: 'A stellar nursery explored through separate fields, epochs and an observation-derived 3D model.',
-    defaultMoment: 'carina-webb',
+    defaultMoment: 'carina-ignites',
     note: 'Hubble’s wide Carina mosaic, Webb’s Cosmic Cliffs and the Eta Carinae close-up are separate fields, never an aligned crossfade. Webb’s orbit view uses inferred depth; the Homunculus is a spectroscopy-derived shape model. Reconstructions and the future concept are not observations.',
     moments: [
       {
-        id: 'carina-ignites', date: 'ABOUT 3 MILLION YEARS AGO', kind: 'RECONSTRUCTION',
-        title: 'FIRST STARS IGNITE',
-        text: 'Carina’s first stellar generation carves an expanding bubble of hot gas.',
+        id: 'carina-ignites', date: 'ABOUT 3 MILLION YEARS AGO', kind: 'SCIENTIFIC 3D RECONSTRUCTION',
+        title: 'MASSIVE STARS IGNITE',
+        text: 'A massive young stellar generation carves an expanding bubble of hot gas.',
         source: 'https://science.nasa.gov/asset/hubble/carina-nebula-2/',
         visual: { state: 'formation', theta: .72, phi: 1.17, distance: .92 },
       },
@@ -121,11 +129,11 @@ export const LANDMARK_EXPERIENCES = {
   },
   'crab-nebula': {
     summary: 'A supernova remnant still expanding around a clock-like neutron star.',
-    defaultMoment: 'crab-hubble-expansion',
+    defaultMoment: 'crab-pulsar',
     note: 'The 1054 flash is a reconstruction and the 1928 back-trace is an inference; the 1731 view uses later Hubble data for context. Webb is a separate infrared wavelength view. NASA’s X-ray-informed model is explanatory, not tomography. The finale registers matched-presentation Hubble observations from different instruments; 2026 is their release year.',
     moments: [
       {
-        id: 'crab-1054', date: '1054 CE', kind: 'HISTORICAL OBSERVATION',
+        id: 'crab-1054', date: '1054 CE', kind: 'SCIENTIFIC 3D RECONSTRUCTION',
         title: 'A GUEST STAR BLAZES',
         text: 'Astronomers record the guest star whose remnant becomes the Crab Nebula. The flash shown here reconstructs the supernova light that reached Earth in 1054.',
         source: 'https://www.nasa.gov/news-release/nasa-satellites-find-high-energy-surprises-in-constant-crab-nebula/',
@@ -146,7 +154,7 @@ export const LANDMARK_EXPERIENCES = {
         visual: { state: 'crab.expansion-backtrace', theta: -.18, phi: 1.22, distance: .95 },
       },
       {
-        id: 'crab-pulsar', date: '1968', kind: 'RADIO OBSERVATION',
+        id: 'crab-pulsar', date: '1968', kind: 'SCIENTIFIC 3D MODEL',
         title: 'THE PULSAR STARTS TICKING',
         text: 'Radio pulses reveal the neutron star powering the nebula. NASA’s X-ray-informed model explains its torus and jets; it is a scientific representation, not 3D tomography.',
         source: 'https://science.nasa.gov/missions/hubble/hubble-captures-the-beating-heart-of-the-crab-nebula/',
@@ -168,11 +176,186 @@ export const LANDMARK_EXPERIENCES = {
       },
     ],
   },
-  'm87-black-hole-image': {
-    summary: 'The observation that turned a black hole’s shadow into an image.',
-    defaultMoment: 'm87-shadow',
-    note: 'EHT ring views are computational reconstructions of 1.3-millimeter (230 GHz) radio measurements shown with color maps, not visible-light photographs. Polarization ticks encode measured orientation; the 2018 comparison reads official EHT FITS data.',
+  'cygnus-x-1': {
+    summary: 'The X-ray source that became the first widely accepted stellar black hole.',
+    defaultMoment: 'cygnus-model',
+    note: 'The 3D binary is a scale-compressed, physically informed visualization. The archive panel is a later Chandra X-ray observation, not an image from the 1964 discovery flight; the black hole itself remains unseen.',
     moments: [
+      {
+        id: 'cygnus-model', date: 'MODEL · PRESENT SYSTEM', kind: 'SCIENTIFIC VISUALIZATION',
+        title: 'A BLUE SUPERGIANT FEEDS THE DARK OBJECT',
+        text: 'The persistent 3D view explains the companion, focused stellar wind, accretion flow and compact black-hole shadow at deliberately compressed scales.',
+        source: 'https://chandra.harvard.edu/photo/2011/cygx1/',
+        visual: { state: 'model', theta: 0, phi: Math.PI / 2, distance: 1 },
+      },
+      {
+        id: 'cygnus-discovered', date: '1964', kind: 'X-RAY DISCOVERY',
+        title: 'A ROCKET FINDS CYGNUS X-1',
+        text: 'A sounding-rocket survey discovers an unusually bright source of cosmic X-rays. No black hole image exists from this flight.',
+        source: 'https://www.chandra.harvard.edu/photo/2009/cygx1/',
+        visual: { state: 'history', theta: -.22, phi: 1.34, distance: .98 },
+      },
+      {
+        id: 'cygnus-identified', date: 'EARLY 1970s', kind: 'MULTI-WAVELENGTH EVIDENCE',
+        title: 'THE INVISIBLE COMPANION IS TOO MASSIVE',
+        text: 'X-ray, optical and radio work ties the source to HDE 226868 and an unseen companion whose inferred mass makes a black hole the compelling explanation.',
+        source: 'https://www.chandra.harvard.edu/photo/2009/cygx1/',
+        visual: { state: 'history', theta: .22, phi: 1.27, distance: .94 },
+      },
+      {
+        id: 'cygnus-bet', date: '1974 → 1990', kind: 'SCIENCE HISTORY',
+        title: 'HAWKING CONCEDES THE BET',
+        text: 'Stephen Hawking bets against the black-hole interpretation, then concedes as the observational case becomes overwhelming.',
+        source: 'https://chandra.harvard.edu/photo/2011/cygx1/',
+        visual: { state: 'history', theta: -.08, phi: 1.22, distance: 1.02 },
+      },
+      {
+        id: 'cygnus-chandra', date: '2001–2003 DATA · RELEASED 2009', kind: 'X-RAY OBSERVATION',
+        title: 'CHANDRA MAPS THE ACTIVE SOURCE',
+        text: 'The real archive frame shows X-ray emission from hot gas in the binary. It is scientific intensity color, not a photograph of the event horizon.',
+        source: 'https://www.chandra.harvard.edu/photo/2009/cygx1/',
+        visual: { state: 'observation', observation: true, theta: 0, phi: Math.PI / 2, distance: 1.10 },
+      },
+    ],
+  },
+  'm87-star': {
+    summary: 'A galaxy-scale jet, a dark dynamical engine and the first reconstructed black-hole shadow.',
+    defaultMoment: 'm87-model',
+    note: 'The 3D core and jet remain a physically informed visualization at compressed scale. The archive panel shows EHT radio intensity in scientific color; the separate FIRST BLACK HOLE IMAGE milestone contains the full observation sequence.',
+    moments: [
+      {
+        id: 'm87-model', date: 'MODEL · PRESENT SYSTEM', kind: 'SCIENTIFIC VISUALIZATION',
+        title: 'RELATIVISTIC LIGHT SURROUNDS A JET ENGINE',
+        text: 'The persistent 3D view connects a lensed black-hole shadow to the polar outflow, without treating the EHT reconstruction as captured 3D shape.',
+        source: 'https://eventhorizontelescope.org/press-release-april-10-2019-astronomers-capture-first-image-black-hole',
+        visual: { state: 'model', theta: 0, phi: Math.PI / 2, distance: 1 },
+      },
+      {
+        id: 'm87-jet-history', date: '1918', kind: 'HISTORICAL OBSERVATION',
+        title: 'A CURIOUS STRAIGHT RAY',
+        text: 'Heber Curtis describes M87’s jet decades before astronomers understand the compact engine driving it.',
+        source: 'https://www.nasa.gov/missions/spitzer/the-giant-galaxy-around-the-giant-black-hole/',
+        visual: { state: 'history', theta: -.20, phi: 1.25, distance: 1.04 },
+      },
+      {
+        id: 'm87-dark-engine-history', date: '1978', kind: 'DYNAMICAL EVIDENCE',
+        title: 'AN EARLY DARK-ENGINE CLAIM',
+        text: 'An early ground-based dynamical claim points to an enormous central mass; later studies challenge it before Hubble-era evidence restores the case.',
+        source: 'https://science.nasa.gov/missions/hubble/nasas-hubble-space-telescope-probes-the-compact-nucleus-of-galaxy-m87/',
+        visual: { state: 'history', theta: .18, phi: 1.20, distance: .98 },
+      },
+      {
+        id: 'm87-earth-array', date: 'APRIL 2017', kind: 'RADIO OBSERVATION',
+        title: 'EARTH BECOMES ONE TELESCOPE',
+        text: 'Synchronized observatories record 1.3-millimeter signals so interferometry can synthesize an Earth-sized aperture.',
+        source: 'https://eventhorizontelescope.org/press-release-april-10-2019-astronomers-capture-first-image-black-hole',
+        visual: { state: 'history', theta: -.12, phi: 1.16, distance: 1.06 },
+      },
+      {
+        id: 'm87-eht-image', date: '2017 DATA · RELEASED APRIL 10 · 2019', kind: 'RADIO RECONSTRUCTION',
+        title: 'THE FIRST BLACK-HOLE SHADOW IMAGE',
+        text: 'The real EHT product appears beside the still-visible model. Orange encodes reconstructed radio intensity, not the source’s visible color.',
+        source: 'https://eventhorizontelescope.org/press-release-april-10-2019-astronomers-capture-first-image-black-hole',
+        visual: { state: 'observation', observation: true, theta: 0, phi: Math.PI / 2, distance: 1.12 },
+      },
+    ],
+  },
+  'sagittarius-a-star': {
+    summary: 'From a compact radio source to stellar-orbit proof and the first image of our own black hole.',
+    defaultMoment: 'sgr-model',
+    note: 'The 3D lensing, accretion flow and S-star scene is a physically informed visualization. The EHT panel is an average reconstructed from variable 2017 radio data, not a visible-light photograph or recovered image of earlier discoveries.',
+    moments: [
+      {
+        id: 'sgr-model', date: 'MODEL · PRESENT SYSTEM', kind: 'SCIENTIFIC VISUALIZATION',
+        title: 'S-STARS ORBIT A FOUR-MILLION-SUN SHADOW',
+        text: 'The persistent 3D view links the quiescent relativistic flow to the eccentric stellar orbits that reveal the central mass.',
+        source: 'https://eventhorizontelescope.org/blog/astronomers-reveal-first-image-black-hole-heart-our-galaxy',
+        visual: { state: 'model', theta: 0, phi: Math.PI / 2, distance: 1 },
+      },
+      {
+        id: 'sgr-radio-source', date: '1974', kind: 'RADIO DISCOVERY',
+        title: 'A COMPACT SOURCE MARKS THE GALACTIC CENTER',
+        text: 'Radio observations isolate Sagittarius A* as a remarkably compact source near the true center of the Milky Way.',
+        source: 'https://heasarc.gsfc.nasa.gov/docs/objects/galaxies/sag-a_star.html',
+        visual: { state: 'history', theta: -.15, phi: 1.25, distance: 1.04 },
+      },
+      {
+        id: 'sgr-s2-orbit', date: '1992 → 2002', kind: 'ORBITAL EVIDENCE',
+        title: 'S2 TRACES THE INVISIBLE MASS',
+        text: 'A decade of infrared positions reveals S2 on a tight ellipse around Sgr A*, excluding extended clusters and exposing a Solar-System-scale dark mass.',
+        source: 'https://www.eso.org/public/news/eso0226/',
+        visual: { state: 'history', theta: .18, phi: 1.18, distance: .94 },
+      },
+      {
+        id: 'sgr-nobel', date: '2020', kind: 'NOBEL-RECOGNIZED DISCOVERY',
+        title: 'STELLAR ORBITS ESTABLISH THE BLACK HOLE',
+        text: 'The Nobel Prize recognizes the discovery of a supermassive compact object at the center of our galaxy through precision stellar dynamics.',
+        source: 'https://www.nobelprize.org/prizes/physics/2020/popular-information/',
+        visual: { state: 'history', theta: -.08, phi: 1.20, distance: 1.02 },
+      },
+      {
+        id: 'sgr-eht-image', date: '2017 DATA · RELEASED MAY 12 · 2022', kind: 'RADIO RECONSTRUCTION',
+        title: 'EHT IMAGES OUR GALACTIC BLACK HOLE',
+        text: 'The real EHT reconstruction appears beside the still-visible model. Thousands of data-fitting images were combined to reveal the persistent ring and shadow.',
+        source: 'https://eventhorizontelescope.org/blog/astronomers-reveal-first-image-black-hole-heart-our-galaxy',
+        visual: { state: 'observation', observation: true, theta: 0, phi: Math.PI / 2, distance: 1.14 },
+      },
+    ],
+  },
+  'gw150914': {
+    summary: 'A century-old prediction becomes a measured chirp from two merging black holes.',
+    defaultMoment: 'gw150914-model',
+    note: 'The orbiting black holes and blue strain surface are a physically informed visualization; GW150914 had no detected light counterpart. The archive panel is a detector-strain and numerical-relativity figure, not a photograph of the merger.',
+    moments: [
+      {
+        id: 'gw150914-model', date: 'MODEL · 1.3 BILLION YEARS AGO', kind: 'SCIENTIFIC VISUALIZATION',
+        title: 'TWO VACUUM BLACK HOLES INSPIRAL',
+        text: 'The persistent 3D model shows a single-pass inspiral, merger and remnant while the broad surface visualizes spacetime strain rather than visible light.',
+        source: 'https://ligo.org/detections/gw150914/',
+        visual: { state: 'model', theta: .38, phi: 1.05, distance: 1 },
+      },
+      {
+        id: 'gw150914-predicted', date: '1916', kind: 'THEORY',
+        title: 'GENERAL RELATIVITY PREDICTS THE WAVES',
+        text: 'Einstein’s theory allows disturbances in spacetime to propagate outward as gravitational waves, though their direct measurement remains decades away.',
+        source: 'https://ligo.org/detections/gw150914/',
+        visual: { state: 'history', theta: -.22, phi: 1.12, distance: 1.02 },
+      },
+      {
+        id: 'gw150914-detection', date: 'SEPTEMBER 14 · 2015', kind: 'GRAVITATIONAL-WAVE OBSERVATION',
+        title: 'BOTH LIGO DETECTORS HEAR THE CHIRP',
+        text: 'The real strain comparison appears beside the model: Livingston records the signal about seven milliseconds before Hanford.',
+        source: 'https://ligo.org/detections/gw150914/',
+        visual: { state: 'observation', observation: true, theta: .28, phi: 1.08, distance: 1.16 },
+      },
+      {
+        id: 'gw150914-announced', date: 'FEBRUARY 11 · 2016', kind: 'DISCOVERY ANNOUNCEMENT',
+        title: 'THE FIRST DIRECT DETECTION IS ANNOUNCED',
+        text: 'LIGO and Virgo report gravitational waves from colliding black holes, confirming that stellar-mass black-hole binaries merge.',
+        source: 'https://ligo.org/detections/gw150914/',
+        visual: { state: 'observation', observation: true, theta: .16, phi: 1.04, distance: 1.16 },
+      },
+      {
+        id: 'gw150914-nobel', date: '2017', kind: 'NOBEL PRIZE',
+        title: 'A NEW WAY TO OBSERVE THE UNIVERSE',
+        text: 'The Nobel Prize recognizes decisive contributions to LIGO and the observation that opened gravitational-wave astronomy.',
+        source: 'https://www.nobelprize.org/prizes/physics/2017/press-release/',
+        visual: { state: 'history', theta: -.12, phi: 1.10, distance: 1.04 },
+      },
+    ],
+  },
+  'm87-black-hole-image': {
+    summary: 'A relativistic black-hole model beside the observations that revealed its shadow.',
+    defaultMoment: 'm87-model',
+    note: 'The shared 3D core and jet are a scientific visualization and remain the hero. The six evidence chapters are flat sourced observations or explanatory instrument views. EHT rings reconstruct 1.3-millimeter radio measurements; they are not visible-light photographs.',
+    moments: [
+      {
+        id: 'm87-model', date: 'MODEL · PRESENT SYSTEM', kind: 'SCIENTIFIC VISUALIZATION',
+        title: 'A RELATIVISTIC CORE POWERS THE JET',
+        text: 'The persistent 3D view combines an opaque horizon, Doppler-brightened accretion flow, analytic lensing and a qualitative bipolar jet. Scales, colors and flow speed are explanatory.',
+        source: 'https://eventhorizontelescope.org/press-release-april-10-2019-astronomers-capture-first-image-black-hole',
+        visual: { state: 'model', theta: -.12, phi: 1.24, distance: .96 },
+      },
       {
         id: 'm87-jet', date: '1918 · SHOWN WITH 2024 HUBBLE CONTEXT', kind: 'HISTORICAL OBSERVATION',
         title: 'A JET IS DESCRIBED',
@@ -182,8 +365,8 @@ export const LANDMARK_EXPERIENCES = {
       },
       {
         id: 'm87-dark-engine', date: '1978 · SHOWN WITH 2021 MULTISCALE CONTEXT', kind: 'DYNAMICAL EVIDENCE',
-        title: 'GRAVITY REVEALS A DARK ENGINE',
-        text: 'Stellar dynamics point to a massive compact object. The later Hubble, ALMA, VLBA, and EHT stack is a cross-scale comparison, not 1978 imagery.',
+        title: 'AN EARLY DARK-ENGINE CLAIM',
+        text: 'A 1978 ground-based dynamical claim points to a massive compact object, though later studies initially fail to confirm it. The Hubble, ALMA, VLBA, and EHT stack is later cross-scale context, not 1978 imagery.',
         source: 'https://science.nasa.gov/missions/hubble/nasas-hubble-space-telescope-probes-the-compact-nucleus-of-galaxy-m87/',
         visual: { state: 'm87-core-multiscale', theta: -.12, phi: 1.22, distance: .92 },
       },
@@ -262,7 +445,10 @@ export const LANDMARK_EXPERIENCES = {
         title: 'THE DOT IS REVISITED',
         text: 'A false-color revisit remaps the same 1990 green, blue, and violet frames with modern processing. It adds no new observation or resolved spatial detail.',
         source: 'https://science.nasa.gov/mission/voyager/voyager-1s-pale-blue-dot/',
-        visual: { state: 'pbd-compare-1990-2020', theta: 0, phi: 1.20, distance: 1 },
+        visual: {
+          state: 'pbd-compare-1990-2020', observation: true,
+          theta: 0, phi: 1.20, distance: 1,
+        },
       },
     ],
   },
@@ -671,27 +857,43 @@ export const BODY_EXPERIENCES = {
 };
 
 export function landmarkExperience(entry){
-  const alias1054 = entry && entry.id === 'crab-nebula-sn-1054';
-  const curated = entry && LANDMARK_EXPERIENCES[
-    alias1054 ? 'crab-nebula' : entry.id
-  ];
-  if (curated) return alias1054
-    ? { ...curated, defaultMoment: 'crab-1054' }
-    : curated;
+  const alias = entry && LANDMARK_EXPERIENCE_ALIASES[entry.id];
+  const curated = entry && LANDMARK_EXPERIENCES[alias || entry.id];
+  if (curated){
+    if (entry.id === 'crab-nebula-sn-1054')
+      return { ...curated, defaultMoment: 'crab-pulsar' };
+    if (entry.id === 'gw150914-first-gravitational-wave')
+      return { ...curated, defaultMoment: 'gw150914-model' };
+    return curated;
+  }
+  const supernova = supernovaExperience(entry);
+  if (supernova) return supernova;
+  const nebula = nebulaModelExperience(entry);
+  if (nebula) return nebula;
   const modeledBlackHole = !!entry && MODELED_BLACK_HOLE_IDS.has(entry.id);
+  const deepSkyArchiveOnly = !!entry && !landmarkImage(entry.id) &&
+    (entry.category === 'NEBULA' || entry.category === 'SUPERNOVA');
+  const archiveText = entry.wow || 'This catalog record is preserved for reference.';
   return {
     summary: entry.subtitle || entry.famousFor || 'A field note from the cosmic archive.',
-    defaultMoment: 'archive-observation',
+    defaultMoment: deepSkyArchiveOnly ? 'archive-record' : 'archive-observation',
     note: modeledBlackHole
       ? 'This is a scale-compressed, physically informed visualization. The shadow, lensing, disk, companion or merger context is explanatory—not a visible-light photograph or full general-relativistic ray trace.'
+      : deepSkyArchiveOnly
+      ? 'No verified visual asset is available for this archive record; its catalog facts remain accessible while a curated reconstruction is pending.'
       : 'This archive entry has one verified observation marker; deeper visual chapters are added only after source and asset review.',
     moments: [{
-      id: 'archive-observation',
+      id: deepSkyArchiveOnly ? 'archive-record' : 'archive-observation',
       date: entry.date || 'ARCHIVE',
-      kind: modeledBlackHole ? 'SCIENTIFIC VISUALIZATION' : 'OBSERVATION',
+      kind: modeledBlackHole ? 'SCIENTIFIC VISUALIZATION'
+        : deepSkyArchiveOnly ? 'ARCHIVE RECORD' : 'OBSERVATION',
       title: entry.famousFor || entry.subtitle || entry.name,
-      text: entry.wow || 'Open More for the full field note.',
-      visual: {
+      text: deepSkyArchiveOnly
+        ? archiveText + ' No verified visual asset is displayed for this record.'
+        : entry.wow || 'Open More for the full field note.',
+      visual: deepSkyArchiveOnly ? {
+        state: 'archive-record', observation: false, theta: 0, phi: 1.22, distance: 1,
+      } : {
         wavelength: 'visible', theta: 0,
         phi: entry && NEBULA_PROFILE_IDS.includes(entry.id) ? Math.PI/2 : 1.22,
         distance: 1,

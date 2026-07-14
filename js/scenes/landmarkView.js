@@ -9,26 +9,50 @@ import { buildFeaturedExhibit } from '../procgen/featured/registry.js';
 import { landmarkImage } from '../data/landmarkImages.js';
 import { landmarkImageIR } from '../data/landmarkImagesIR.js';
 
+function buildArchiveOnly(entry){
+  const group = new THREE.Group();
+  group.name = `ArchiveOnly.${entry.id}`;
+  group.userData.archiveOnly = true;
+  group.userData.noGenericReconstruction = true;
+  group.userData.reason = 'No curated 3D reconstruction or verified observation asset';
+  return {
+    group,
+    focusDist: 80,
+    startTheta: 0,
+    startPhi: Math.PI / 2,
+    autoRotate: false,
+    isImage: false,
+  };
+}
+
 export class LandmarkView {
   constructor(entry){
     this.entry = entry;
     this.scene = new THREE.Scene();
     this.scene.add(buildStarSphere('lm:' + entry.id));
 
-    // real photograph if we have one, else the procedural exhibit. Structured
-    // deep-sky photos (nebulae, remnants, galaxies) are reconstructed as real 3D
-    // particle-cloud volumes you can orbit; diagram-like plates stay flat.
+    // Curated objects own explicit, science-led 3D renderers. Uncurated nebula
+    // and remnant URLs keep their authentic observation as a flat archive plate
+    // instead of reviving the old generic fuzzy volume. Galaxies retain the
+    // existing volume fallback until their own curation pass.
     const img = landmarkImage(entry.id);
     const ir = landmarkImageIR(entry.id);
-    const volumetric = !!img && ['NEBULA', 'SUPERNOVA', 'GALAXY'].includes(entry.category);
-    this.exhibit = buildFeaturedExhibit({ entry, image: img, infrared: ir })
-                 || (volumetric ? buildImageVolume(entry, img.file)
+    const galaxyVolume = !!img && entry.category === 'GALAXY';
+    const featured = buildFeaturedExhibit({ entry, image: img, infrared: ir });
+    const deepSkyArchiveOnly = !img &&
+      (entry.category === 'NEBULA' || entry.category === 'SUPERNOVA');
+    this.exhibit = featured
+                 || (galaxyVolume ? buildImageVolume(entry, img.file)
                  : img ? buildImagePlate(entry, img.file)
+                 : deepSkyArchiveOnly ? buildArchiveOnly(entry)
                  : buildExhibit(entry));
     this.hasImage = !!img;
-    const fallbackCredit = img ? (img.credit + (ir ? ' · IR: ' + ir.credit : '') +
-      (this.exhibit.modelCredit ? ' · ' + this.exhibit.modelCredit : '')) : null;
-    this.imageCredit = this.exhibit.imageCredit || fallbackCredit;
+    const fallbackImageCredit = img
+      ? img.credit + (ir ? ' · IR: ' + ir.credit : '')
+      : null;
+    this.imageCredit = this.exhibit.imageCredit || fallbackImageCredit;
+    this.modelCredit = this.exhibit.modelCredit || null;
+    this._activeMoment = null;
     this.scene.add(this.exhibit.group);
 
     // soft lighting for any lit (non-additive) exhibit geometry
@@ -46,8 +70,38 @@ export class LandmarkView {
   setMoment(moment){
     const visual = moment && (moment.visual || moment);
     if (!visual) return;
+    this._activeMoment = moment;
     if (this.exhibit.setMoment) this.exhibit.setMoment(visual);
     else if (visual.wavelength) this.setIR(visual.wavelength === 'infrared');
+  }
+
+  currentCredit(){
+    const moment = this._activeMoment;
+    const visual = moment && (moment.visual || moment) || {};
+    const presentationCredit = this.exhibit.creditForPresentation &&
+      this.exhibit.creditForPresentation({ moment, visual });
+    if (presentationCredit) return presentationCredit;
+    const persistentModel = this.exhibit.group.userData.modelAlwaysVisible === true ||
+      this.exhibit.group.userData.persistentThreeDimensionalModel === true;
+    const explicitObservation = visual.observation === true ||
+      visual.state === 'observation' ||
+      this.exhibit.group.userData.observationVisible === true ||
+      this.exhibit.group.userData.observationRequested === true ||
+      this.exhibit.group.userData.activePresentation === 'model-plus-source-observation';
+    // Legacy observation-led exhibits do not all carry explicit visual flags.
+    // Persistent model-led exhibits do, so their history chapter names must not
+    // falsely claim that a hidden source image is currently on screen.
+    const inferredObservation = !persistentModel &&
+      /OBSERVATION|IMAGE|REGISTERED COMPARISON/.test(moment && moment.kind || '');
+    const observation = explicitObservation || inferredObservation;
+    if (observation && this.imageCredit){
+      if (persistentModel && this.modelCredit)
+        return { label: 'OBSERVATION + MODEL', text: this.imageCredit + ' · ' + this.modelCredit };
+      return { label: 'IMAGE', text: this.imageCredit };
+    }
+    if (this.modelCredit) return { label: 'MODEL', text: this.modelCredit };
+    if (this.imageCredit) return { label: 'SOURCE', text: this.imageCredit };
+    return null;
   }
 
   focusDist(){ return this.exhibit.focusDist || 80; }

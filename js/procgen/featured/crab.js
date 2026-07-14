@@ -1,27 +1,51 @@
-/* Crab Nebula: an observation-led 3D exhibit.
-   The 1999/2024 Hubble products share one registered presentation plane; Webb
-   is a separate infrared wavelength view, never a time-morph target. NASA's
-   X-ray-informed GLB is shown as a centered scientific representation rather
-   than coordinate-aligned tomography. */
+/* Crab Nebula: model-first remnant sculpt with sourced observation sidecars.
+   The spatial reconstruction stays visible in every chapter. Hubble and Webb
+   products remain flat archive evidence and are never extruded into a cloud,
+   painted onto the model, or treated as recovered line-of-sight depth. */
 
 import * as THREE from 'three';
+import { TEX_TIER } from '../../core/quality.js';
 import { mulberry, hashStr, gaussian } from '../../utils/rng.js';
-import { detectTier } from '../../core/quality.js';
+import { loadTexture } from '../../utils/assets.js';
+import { ResourceScope } from './resourceScope.js';
 
 const HUBBLE_1999 = 'images/crab/hubble-1999.jpg';
 const HUBBLE_2024 = 'images/crab/hubble-2024.jpg';
 const WEBB_2023 = 'images/crab/webb-2023.jpg';
-const XRAY_MODEL = 'models/crab/crab-nebula.glb';
-const DRACO_DECODER =
-  'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/';
-
-const HUBBLE_SIZE = 3864;
 const WEBB_ASPECT = 4000 / 3483;
-const PHOTO_HEIGHT = 80;
-const HUBBLE_WIDTH = PHOTO_HEIGHT;
-const WEBB_WIDTH = PHOTO_HEIGHT * WEBB_ASPECT;
-const MODEL_CREDIT = '3D model: NASA/Francis J. Summers; NASA/Robert L. Hurt';
-const IMAGE_CREDIT = 'Hubble 1999/2024: NASA, ESA, STScI, W. Blair; processing J. DePasquale · Webb: NASA, ESA, CSA, STScI, T. Temim · 3D: NASA/F. Summers, R. Hurt';
+
+const IMAGE_CREDIT =
+  'Hubble 1999/2024: NASA, ESA, STScI, W. Blair; processing J. DePasquale · Webb 2023: NASA, ESA, CSA, STScI, T. Temim';
+const MODEL_CREDIT =
+  'Scientific 3D model · filament depth, ejecta placement, color and pulsar-wind scale are interpretive';
+
+const HIGH_TIER = TEX_TIER === 'high';
+const PRECISION = HIGH_TIER ? 'highp' : 'mediump';
+const QUALITY = Object.freeze(HIGH_TIER ? Object.freeze({
+  shellWidth: 112,
+  shellHeight: 64,
+  filamentPaths: 28,
+  filamentSteps: 34,
+  filamentKnots: 420,
+  tubeSegments: 144,
+  tubeCrossSegments: 12,
+  wispSegments: 112,
+  jetLengthSegments: 38,
+  jetRadialSegments: 24,
+  blastShards: 108,
+}) : Object.freeze({
+  shellWidth: 60,
+  shellHeight: 34,
+  filamentPaths: 17,
+  filamentSteps: 22,
+  filamentKnots: 170,
+  tubeSegments: 76,
+  tubeCrossSegments: 8,
+  wispSegments: 60,
+  jetLengthSegments: 22,
+  jetRadialSegments: 14,
+  blastShards: 46,
+}));
 
 const STATES = Object.freeze({
   SUPERNOVA: 'crab.supernova-flash',
@@ -34,39 +58,40 @@ const STATES = Object.freeze({
 
 const PRESETS = Object.freeze({
   [STATES.SUPERNOVA]: {
-    hubble: .05, webb: 0, epoch: 0, compare: 0, saturation: 1.04,
-    exposure: .58, gasPatches: .28, stars: .10, webbStars: 0, backtrace: .72,
-    filaments: .18, flash: 1, engine: 0, model: 0,
+    filaments: .16, cocoon: .08, ejecta: .10, knots: .08,
+    engine: .10, blast: 1, warm: .55, archive: 0, archiveMode: 'none',
   },
   [STATES.DISCOVERY]: {
-    hubble: .92, webb: 0, epoch: 0, compare: 0, saturation: .76,
-    exposure: .52, gasPatches: .24, stars: .46, webbStars: 0, backtrace: 0,
-    filaments: .30, flash: 0, engine: 0, model: 0,
+    filaments: .92, cocoon: .52, ejecta: .66, knots: .62,
+    engine: .30, blast: 0, warm: .24, archive: 1, archiveMode: 'hubble',
   },
   [STATES.BACKTRACE]: {
-    hubble: .96, webb: 0, epoch: 0, compare: 0, saturation: 1.02,
-    exposure: .86, gasPatches: .88, stars: .66, webbStars: 0, backtrace: .78,
-    filaments: .72, flash: 0, engine: 0, model: 0,
+    filaments: 1.16, cocoon: .38, ejecta: .54, knots: .96,
+    engine: .24, blast: 0, warm: .30, archive: .92, archiveMode: 'hubble',
   },
   [STATES.PULSAR]: {
-    hubble: .24, webb: 0, epoch: .58, compare: 0, saturation: 1.08,
-    exposure: .70, gasPatches: .42, stars: .28, webbStars: 0, backtrace: 0,
-    filaments: .44, flash: 0, engine: 1, model: 1,
+    filaments: .94, cocoon: 1.06, ejecta: .86, knots: .62,
+    engine: 1.18, blast: 0, warm: .14, archive: 0, archiveMode: 'none',
   },
   [STATES.WEBB]: {
-    hubble: 0, webb: 1, epoch: 1, compare: 0, saturation: 1.10,
-    exposure: 1.02, gasPatches: .70, stars: 0, webbStars: .82, backtrace: 0,
-    filaments: .86, flash: 0, engine: .18, model: 0,
+    filaments: 1.08, cocoon: .92, ejecta: .78, knots: .64,
+    engine: .62, blast: 0, warm: .86, archive: 1, archiveMode: 'webb',
   },
   [STATES.EXPANSION]: {
-    hubble: 1, webb: 0, epoch: .5, compare: 1, saturation: 1.08,
-    exposure: .98, gasPatches: .80, stars: .82, webbStars: 0, backtrace: 0,
-    filaments: .74, flash: 0, engine: 0, model: 0,
+    filaments: 1.18, cocoon: .48, ejecta: .70, knots: 1,
+    engine: .40, blast: 0, warm: .34, archive: 1, archiveMode: 'comparison',
   },
 });
 
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
+function clampStep(dt){
+  return THREE.MathUtils.clamp(Number.isFinite(dt) ? dt : 0, 0, .05);
+}
+
 function damp(value, target, speed, dt){
-  return THREE.MathUtils.lerp(value, target, 1 - Math.exp(-speed * dt));
+  return THREE.MathUtils.lerp(value, target, 1-Math.exp(-speed*dt));
 }
 
 function stateFromVisual(visual){
@@ -78,1524 +103,1095 @@ function stateFromVisual(visual){
   if (/1054|supernova|flash/.test(value)) return STATES.SUPERNOVA;
   if (/1731|found|discover|optical/.test(value)) return STATES.DISCOVERY;
   if (/1928|linked|backtrace|inference/.test(value)) return STATES.BACKTRACE;
-  if (/1968|pulsar|engine/.test(value)) return STATES.PULSAR;
   if (/2023|webb|infrared/.test(value)) return STATES.WEBB;
   if (/2026|hubble|expansion|1999-2024/.test(value)) return STATES.EXPANSION;
-  if (visual && visual.wavelength === 'infrared') return STATES.WEBB;
-  return STATES.EXPANSION;
+  return STATES.PULSAR;
 }
 
-function solidTexture(color){
-  const c = new THREE.Color(color);
-  const data = new Uint8Array([
-    Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255), 255,
-  ]);
-  const texture = new THREE.DataTexture(data, 1, 1, THREE.RGBAFormat);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function softTexture(){
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gradient.addColorStop(0, 'rgba(255,255,255,.96)');
-  gradient.addColorStop(.18, 'rgba(255,255,255,.64)');
-  gradient.addColorStop(.52, 'rgba(255,255,255,.16)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(canvas);
-}
-
-function makeHubbleMaterial(texture1999, texture2024){
-  return new THREE.ShaderMaterial({
-    uniforms: {
-      u1999: { value: texture1999 },
-      u2024: { value: texture2024 },
-      uReady1999: { value: 0 },
-      uReady2024: { value: 0 },
-      uEpoch: { value: .5 },
-      uCompare: { value: 1 },
-      uCurtain: { value: .5 },
-      uSaturation: { value: 1 },
-      uExposure: { value: 1 },
-      uOpacity: { value: 1 },
-    },
-    transparent: true,
-    depthWrite: false,
-    depthTest: false,
-    vertexShader: `
-      varying vec2 vUv;
-      void main(){
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }`,
-    fragmentShader: `
-      uniform sampler2D u1999;
-      uniform sampler2D u2024;
-      uniform float uReady1999;
-      uniform float uReady2024;
-      uniform float uEpoch;
-      uniform float uCompare;
-      uniform float uCurtain;
-      uniform float uSaturation;
-      uniform float uExposure;
-      uniform float uOpacity;
-      varying vec2 vUv;
-      void main(){
-        vec3 earlier = texture2D(u1999, vUv).rgb;
-        vec3 later = texture2D(u2024, vUv).rgb;
-        if (uReady1999 < .5) earlier = later;
-        if (uReady2024 < .5) later = earlier;
-        float side = smoothstep(uCurtain-.006, uCurtain+.006, vUv.x);
-        vec3 dissolved = mix(earlier, later, uEpoch);
-        vec3 registered = mix(earlier, later, side);
-        vec3 color = mix(dissolved, registered, uCompare);
-        float light = dot(color, vec3(.2126, .7152, .0722));
-        color = mix(vec3(light), color, uSaturation) * uExposure;
-        float edgeX = smoothstep(0.0, .055, vUv.x) *
-          smoothstep(0.0, .055, 1.0-vUv.x);
-        float edgeY = smoothstep(0.0, .055, vUv.y) *
-          smoothstep(0.0, .055, 1.0-vUv.y);
-        gl_FragColor = vec4(color, uOpacity*edgeX*edgeY);
-      }`,
-  });
-}
-
-function makeWebbMaterial(texture){
-  return new THREE.ShaderMaterial({
-    uniforms: {
-      uMap: { value: texture },
-      uReady: { value: 0 },
-      uSaturation: { value: 1 },
-      uExposure: { value: 1 },
-      uOpacity: { value: 0 },
-    },
-    transparent: true,
-    depthWrite: false,
-    depthTest: false,
-    vertexShader: `
-      varying vec2 vUv;
-      void main(){
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }`,
-    fragmentShader: `
-      uniform sampler2D uMap;
-      uniform float uReady;
-      uniform float uSaturation;
-      uniform float uExposure;
-      uniform float uOpacity;
-      varying vec2 vUv;
-      void main(){
-        vec3 color = texture2D(uMap, vUv).rgb;
-        float light = dot(color, vec3(.2126, .7152, .0722));
-        color = mix(vec3(light), color, uSaturation) * uExposure;
-        float edgeX = smoothstep(0.0, .055, vUv.x) *
-          smoothstep(0.0, .055, 1.0-vUv.x);
-        float edgeY = smoothstep(0.0, .055, vUv.y) *
-          smoothstep(0.0, .055, 1.0-vUv.y);
-        gl_FragColor = vec4(color,
-          uOpacity * mix(.24, 1.0, uReady) * edgeX * edgeY);
-      }`,
-  });
-}
-
-function imagePixels(image, width, height, blur = 0){
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (blur) ctx.filter = `blur(${blur}px)`;
-  ctx.drawImage(image, 0, 0, width, height);
-  return ctx.getImageData(0, 0, width, height).data;
-}
-
-function textureSource(image, maxLongSide){
-  const longest = Math.max(image.naturalWidth || image.width,
-    image.naturalHeight || image.height);
-  if (longest <= maxLongSide) return image;
-  const scale = maxLongSide/longest;
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(image.naturalWidth*scale));
-  canvas.height = Math.max(1, Math.round(image.naturalHeight*scale));
-  canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas;
-}
-
-function luminancePixels(pixels){
-  const result = new Float32Array(pixels.length / 4);
-  for (let i = 0; i < result.length; i++){
-    const q = i * 4;
-    result[i] = (.2126*pixels[q] + .7152*pixels[q+1] + .0722*pixels[q+2]) / 255;
-  }
-  return result;
-}
-
-function sampledColor(pixels, offset, saturationBoost = 1.18){
-  let red = pixels[offset] / 255;
-  let green = pixels[offset+1] / 255;
-  let blue = pixels[offset+2] / 255;
-  const light = .2126*red + .7152*green + .0722*blue;
-  red = THREE.MathUtils.clamp(light + (red-light)*saturationBoost, 0, 1);
-  green = THREE.MathUtils.clamp(light + (green-light)*saturationBoost, 0, 1);
-  blue = THREE.MathUtils.clamp(light + (blue-light)*saturationBoost, 0, 1);
-  return new THREE.Color(red, green, blue).convertSRGBToLinear();
-}
-
-function starCandidates(imageA, imageB, width, height){
-  const sharpA = imagePixels(imageA, width, height);
-  const sharpB = imagePixels(imageB || imageA, width, height);
-  const softA = imagePixels(imageA, width, height, 3.2);
-  const softB = imagePixels(imageB || imageA, width, height, 3.2);
-  const lumA = luminancePixels(sharpA);
-  const lumB = luminancePixels(sharpB);
-  const blurA = luminancePixels(softA);
-  const blurB = luminancePixels(softB);
-  const candidates = [];
-
-  for (let y = 2; y < height-2; y++){
-    for (let x = 2; x < width-2; x++){
-      const q = y*width+x;
-      const lightA = lumA[q], lightB = lumB[q];
-      const contrastA = lightA-blurA[q], contrastB = lightB-blurB[q];
-      // Requiring a compact peak in both registered Hubble frames rejects
-      // moving filament knots while keeping stable background stars.
-      if (imageB && (Math.min(contrastA, contrastB) < .045 ||
-          Math.min(lightA, lightB) < .26)) continue;
-      if (!imageB && (contrastA < .075 || lightA < .34)) continue;
-      const score = imageB
-        ? Math.min(contrastA, contrastB) + Math.min(lightA, lightB)*.16
-        : contrastA + lightA*.16;
-      let localMax = true;
-      const peak = imageB ? Math.min(lightA, lightB) : lightA;
-      for (let dy = -2; dy <= 2 && localMax; dy++){
-        for (let dx = -2; dx <= 2; dx++){
-          if (!dx && !dy) continue;
-          const n = (y+dy)*width+x+dx;
-          const other = imageB ? Math.min(lumA[n], lumB[n]) : lumA[n];
-          if (other > peak){ localMax = false; break; }
-        }
-      }
-      if (localMax) candidates.push({ x, y, score });
-    }
-  }
-  candidates.sort((a, b) => b.score-a.score);
-  return { candidates, pixelsA: sharpA, pixelsB: sharpB };
-}
-
-function selectSeparated(candidates, limit, radiusSq){
-  const selected = [];
-  const cellSize = Math.max(1,Math.sqrt(radiusSq));
-  const buckets = new Map();
-  for (const candidate of candidates){
-    const cellX = Math.floor(candidate.x/cellSize);
-    const cellY = Math.floor(candidate.y/cellSize);
-    let overlaps = false;
-    for (let dy = -1; dy <= 1 && !overlaps; dy++){
-      for (let dx = -1; dx <= 1 && !overlaps; dx++){
-        const nearby = buckets.get(`${cellX+dx}:${cellY+dy}`) || [];
-        overlaps = nearby.some(other => {
-          const x = candidate.x-other.x, y = candidate.y-other.y;
-          return x*x+y*y < radiusSq;
-        });
-      }
-    }
-    if (overlaps) continue;
-    selected.push(candidate);
-    const key = `${cellX}:${cellY}`;
-    if (!buckets.has(key)) buckets.set(key,[]);
-    buckets.get(key).push(candidate);
-    if (selected.length >= limit) break;
-  }
-  return selected;
-}
-
-function buildRegisteredStars(root, image1999, image2024, budget, uniforms, seed){
-  const width = budget.sample;
-  const height = width;
-  const sampled = starCandidates(image1999, image2024, width, height);
-  const selected = selectSeparated(sampled.candidates, budget.stars, 13);
-  if (!selected.length) return null;
-
-  const rnd = mulberry(hashStr(seed));
-  const positions = new Float32Array(selected.length*3);
-  const colors1999 = new Float32Array(selected.length*3);
-  const colors2024 = new Float32Array(selected.length*3);
-  const sizes = new Float32Array(selected.length);
-  const uvx = new Float32Array(selected.length);
-  for (let i = 0; i < selected.length; i++){
-    const star = selected[i];
-    const u = star.x/(width-1), v = star.y/(height-1);
-    positions[i*3] = (u-.5)*HUBBLE_WIDTH;
-    positions[i*3+1] = (.5-v)*PHOTO_HEIGHT;
-    positions[i*3+2] = -8-rnd()*50;
-    const offset = (star.y*width+star.x)*4;
-    const a = sampledColor(sampled.pixelsA, offset, 1.28);
-    const b = sampledColor(sampled.pixelsB, offset, 1.28);
-    colors1999.set([a.r, a.g, a.b], i*3);
-    colors2024.set([b.r, b.g, b.b], i*3);
-    sizes[i] = 2.3+Math.min(7.2, star.score*19);
-    uvx[i] = u;
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('aColor1999', new THREE.BufferAttribute(colors1999, 3));
-  geometry.setAttribute('aColor2024', new THREE.BufferAttribute(colors2024, 3));
-  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
-  geometry.setAttribute('aUvX', new THREE.BufferAttribute(uvx, 1));
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      uOrbit: uniforms.uOrbit,
-      uOpacity: uniforms.uStarOpacity,
-      uEpoch: uniforms.uEpoch,
-      uCompare: uniforms.uCompare,
-      uCurtain: uniforms.uCurtain,
-    },
-    transparent: true,
-    depthWrite: false,
-    depthTest: false,
-    blending: THREE.AdditiveBlending,
-    vertexShader: `
-      attribute vec3 aColor1999;
-      attribute vec3 aColor2024;
-      attribute float aSize;
-      attribute float aUvX;
-      uniform float uOrbit;
-      uniform float uOpacity;
-      uniform float uEpoch;
-      uniform float uCompare;
-      uniform float uCurtain;
-      varying vec3 vColor;
-      varying float vOpacity;
-      void main(){
-        float side = smoothstep(uCurtain-.006, uCurtain+.006, aUvX);
-        float epoch = mix(uEpoch, side, uCompare);
-        vColor = mix(aColor1999, aColor2024, epoch);
-        vOpacity = uOpacity*uOrbit;
-        vec3 p = position;
-        p.z *= uOrbit;
-        vec4 mv = modelViewMatrix * vec4(p, 1.0);
-        gl_Position = projectionMatrix * mv;
-        gl_PointSize = aSize * clamp(94.0/max(38.0, -mv.z), .72, 2.2);
-      }`,
-    fragmentShader: `
-      varying vec3 vColor;
-      varying float vOpacity;
-      void main(){
-        vec2 p = abs(gl_PointCoord*2.0-1.0);
-        float r = length(p);
-        if (r > 1.0) discard;
-        float halo = pow(max(0.0, 1.0-r), 1.45);
-        float core = pow(max(0.0, 1.0-r), 5.5);
-        float rays = (exp(-p.x*22.0)*pow(1.0-p.y, 4.0) +
-                      exp(-p.y*22.0)*pow(1.0-p.x, 4.0))*.17;
-        vec3 color = vColor*(halo*.82+core*.72) + vec3(core*.10);
-        gl_FragColor = vec4(color, vOpacity*(halo+rays));
-      }`,
-  });
-  const stars = new THREE.Points(geometry, material);
-  stars.name = 'registered-colored-hubble-stars';
-  stars.userData.allowedPointRole = 'registered-stellar-sources';
-  stars.renderOrder = 8;
-  stars.visible = false;
-  root.add(stars);
-  return { stars, count: selected.length };
-}
-
-function buildWebbStars(root, image, budget, uniforms, seed){
-  const width = budget.sample;
-  const height = Math.max(2, Math.round(width/WEBB_ASPECT));
-  const sampled = starCandidates(image, null, width, height);
-  const selected = selectSeparated(sampled.candidates, budget.webbStars, 12);
-  if (!selected.length) return null;
-
-  const rnd = mulberry(hashStr(seed));
-  const positions = new Float32Array(selected.length*3);
-  const colors = new Float32Array(selected.length*3);
-  const sizes = new Float32Array(selected.length);
-  for (let i = 0; i < selected.length; i++){
-    const star = selected[i];
-    const u = star.x/(width-1), v = star.y/(height-1);
-    positions[i*3] = (u-.5)*WEBB_WIDTH;
-    positions[i*3+1] = (.5-v)*PHOTO_HEIGHT;
-    positions[i*3+2] = -7-rnd()*48;
-    const offset = (star.y*width+star.x)*4;
-    const color = sampledColor(sampled.pixelsA, offset, 1.32);
-    colors.set([color.r, color.g, color.b], i*3);
-    sizes[i] = 2.2+Math.min(7.5, star.score*18);
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
-  const material = new THREE.ShaderMaterial({
-    uniforms: { uOrbit: uniforms.uOrbit, uOpacity: uniforms.uWebbStarOpacity },
-    transparent: true,
-    depthWrite: false,
-    depthTest: false,
-    blending: THREE.AdditiveBlending,
-    vertexColors: true,
-    vertexShader: `
-      attribute float aSize;
-      uniform float uOrbit;
-      uniform float uOpacity;
-      varying vec3 vColor;
-      varying float vOpacity;
-      void main(){
-        vColor = color;
-        vOpacity = uOpacity*uOrbit;
-        vec3 p = position;
-        p.z *= uOrbit;
-        vec4 mv = modelViewMatrix*vec4(p, 1.0);
-        gl_Position = projectionMatrix*mv;
-        gl_PointSize = aSize*clamp(94.0/max(38.0, -mv.z), .72, 2.2);
-      }`,
-    fragmentShader: `
-      varying vec3 vColor;
-      varying float vOpacity;
-      void main(){
-        vec2 p = abs(gl_PointCoord*2.0-1.0);
-        float r = length(p);
-        if (r > 1.0) discard;
-        float halo = pow(max(0.0, 1.0-r), 1.4);
-        float core = pow(max(0.0, 1.0-r), 5.0);
-        float rays = (exp(-p.x*20.0)*pow(1.0-p.y, 4.0) +
-                      exp(-p.y*20.0)*pow(1.0-p.x, 4.0))*.16;
-        gl_FragColor = vec4(vColor*(halo+core*.58), vOpacity*(halo+rays));
-      }`,
-  });
-  const stars = new THREE.Points(geometry, material);
-  stars.name = 'aligned-colored-webb-stars';
-  stars.userData.allowedPointRole = 'registered-stellar-sources';
-  stars.renderOrder = 9;
-  stars.visible = false;
-  root.add(stars);
-  return { stars, count: selected.length };
-}
-
-/* Webb resolves a red-orange cage of dust/gas around a bluer synchrotron
-   interior. Sample those exact pixels, then give the two components different
-   ellipsoidal depths. The shader flattens both layers at the canonical camera,
-   so the Webb plate remains the sole head-on observation. */
-function buildWebbStructure(root, image, budget, uniforms, seed){
-  const width = budget.structureSample;
-  const height = Math.max(2, Math.round(width/WEBB_ASPECT));
-  const pixels = imagePixels(image, width, height);
-  const soft = imagePixels(image, width, height, 2.6);
-  const lum = luminancePixels(pixels);
-  const blur = luminancePixels(soft);
-  const rnd = mulberry(hashStr(seed));
-  const cageCandidates = [], synchrotronCandidates = [];
-
-  for (let y = 1; y < height-1; y++){
-    for (let x = 1; x < width-1; x++){
-      const q = y*width+x, offset = q*4;
-      const u = x/(width-1), v = y/(height-1);
-      const nx = (u-.5)*2/.96, ny = (.5-v)*2/.84;
-      const ellipse = nx*nx+ny*ny;
-      if (ellipse > 1.18 || lum[q] < .025) continue;
-      const red = pixels[offset]/255, green = pixels[offset+1]/255, blue = pixels[offset+2]/255;
-      const max = Math.max(red, green, blue), min = Math.min(red, green, blue);
-      const saturation = max > .001 ? (max-min)/max : 0;
-      const contrast = lum[q]-blur[q];
-      const edge = Math.abs(lum[q-1]-lum[q+1])+Math.abs(lum[q-width]-lum[q+width]);
-      if (lum[q] > .58 && contrast > .10 && saturation < .18) continue;
-
-      const warm = Math.max(0, red-blue*.68)+Math.max(0, green-blue*.92)*.42;
-      const cageScore = edge*1.55+saturation*.34+warm*.24+Math.sqrt(lum[q])*.12;
-      if (cageScore > .14)
-        cageCandidates.push({ x, y, u, v, ellipse, score: cageScore*(.86+rnd()*.28) });
-
-      const blueInterior = Math.max(0, blue-(red+green)*.38);
-      const synchScore = blueInterior*.78+lum[q]*.19+edge*.26;
-      if (ellipse < .88 && synchScore > .085)
-        synchrotronCandidates.push({ x, y, u, v, ellipse, score: synchScore*(.86+rnd()*.28) });
-    }
-  }
-  cageCandidates.sort((a, b) => b.score-a.score);
-  synchrotronCandidates.sort((a, b) => b.score-a.score);
-  // A separated selection produces readable broken surface patches instead of
-  // the circular particle carpet used by the earlier volume treatment.
-  const cageSelected = selectSeparated(
-    cageCandidates, budget.webbCagePatches, budget.patchSeparationSq);
-  const synchSelected = selectSeparated(
-    synchrotronCandidates, budget.webbSynchrotronPatches,
-    budget.patchSeparationSq*1.45);
-
-  function buildLayer(selected, shell, name){
-    const positions = [], colors = [], uvs = [], opacities = [], seeds = [];
-    const indices = [];
-    const cell = WEBB_WIDTH/width;
-    for (let i = 0; i < selected.length; i++){
-      const point = selected[i];
-      const depth = Math.sqrt(Math.max(0, 1-Math.min(1, point.ellipse)));
-      const centerX = (point.u-.5)*WEBB_WIDTH;
-      const centerY = (.5-point.v)*PHOTO_HEIGHT;
-      const hemisphere = rnd() < .5 ? -1 : 1;
-      const centerZ = shell
-        ? hemisphere*(3.2+depth*18)+Math.sin(centerX*.31+centerY*.19)*1.1
-        : Math.sin(centerX*.17-centerY*.23)*depth*5.5;
-      const patchWidth = cell*(shell
-        ? 1.75+Math.min(1.15, point.score*1.15)
-        : 2.55+Math.min(1.55, point.score*1.45));
-      const patchHeight = patchWidth*(.42+rnd()*.34);
-      const angle = shell
-        ? Math.atan2(centerY/PHOTO_HEIGHT, centerX/WEBB_WIDTH)+Math.PI*.5+
-          gaussian(rnd)*.23
-        : rnd()*Math.PI;
-      const cos = Math.cos(angle), sin = Math.sin(angle);
-      const offset = (point.y*width+point.x)*4;
-      const sampled = sampledColor(pixels, offset, shell ? 1.34 : 1.18);
-      if (!shell) sampled.lerp(new THREE.Color(0x557fff).convertSRGBToLinear(), .20);
-      const grain = .72+rnd()*.34;
-      const color = [sampled.r*grain, sampled.g*grain, sampled.b*grain];
-      const opacity = shell ? .18+rnd()*.16 : .12+rnd()*.12;
-      const patchSeed = rnd()*73;
-      const base = positions.length/3;
-      const corners = [
-        [-.58, -.40], [.52, -.49], [.60, .38], [-.46, .52],
-      ];
-      for (let j = 0; j < corners.length; j++){
-        const localX = corners[j][0]*patchWidth*(.88+rnd()*.22);
-        const localY = corners[j][1]*patchHeight*(.86+rnd()*.25);
-        const px = centerX+localX*cos-localY*sin;
-        const py = centerY+localX*sin+localY*cos;
-        const zFold = (localX/Math.max(.001, patchWidth))*
-          (shell ? hemisphere*1.1 : .65);
-        positions.push(px, py, centerZ+zFold);
-        colors.push(...color);
-        uvs.push(j === 0 || j === 3 ? 0 : 1, j < 2 ? 0 : 1);
-        opacities.push(opacity);
-        seeds.push(patchSeed);
-      }
-      indices.push(base, base+1, base+2);
-      if (rnd() > .22) indices.push(base, base+2, base+3);
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(opacities, 1));
-    geometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    geometry.computeBoundingSphere();
-    const material = new THREE.ShaderMaterial({
-      uniforms: {
-        uOrbit: uniforms.uOrbit,
-        uOpacity: uniforms.uWebbStructureOpacity,
-      },
-      transparent: true,
-      depthWrite: false,
-      depthTest: true,
-      blending: THREE.NormalBlending,
-      side: THREE.DoubleSide,
-      vertexColors: true,
-      vertexShader: `
-        attribute float aOpacity;
-        attribute float aSeed;
-        uniform float uOrbit;
-        uniform float uOpacity;
-        varying vec2 vUv;
-        varying vec3 vColor;
-        varying float vOpacity;
-        varying float vSeed;
-        void main(){
-          vUv = uv;
-          vColor = color;
-          vOpacity = uOpacity*uOrbit*aOpacity;
-          vSeed = aSeed;
-          vec3 p = position;
-          p.z *= uOrbit;
-          vec4 mv = modelViewMatrix*vec4(p, 1.0);
-          gl_Position = projectionMatrix*mv;
-        }`,
-      fragmentShader: `
-        varying vec2 vUv;
-        varying vec3 vColor;
-        varying float vOpacity;
-        varying float vSeed;
-        float hash12(vec2 p){
-          vec3 p3 = fract(vec3(p.xyx)*.1031);
-          p3 += dot(p3, p3.yzx+33.33);
-          return fract((p3.x+p3.y)*p3.z);
-        }
-        void main(){
-          float edge = min(min(vUv.x, 1.0-vUv.x),
-                           min(vUv.y, 1.0-vUv.y));
-          float edgeMask = smoothstep(.015, .14, edge);
-          float grain = hash12(floor(vUv*vec2(7.0, 5.0))+vSeed);
-          if (grain < .12 || edgeMask < .01) discard;
-          float alpha = vOpacity*edgeMask*(.78+grain*.22);
-          gl_FragColor = vec4(vColor*(.72+grain*.24), alpha);
-        }`,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.name = name;
-    mesh.renderOrder = shell ? 5 : 3;
-    mesh.visible = false;
-    root.add(mesh);
-    return mesh;
-  }
-
-  const cageMesh = buildLayer(
-    cageSelected, true, 'webb-aligned-dust-sulfur-patch-mesh');
-  const synchrotronMesh = buildLayer(
-    synchSelected, false, 'webb-aligned-synchrotron-patch-mesh');
-  return {
-    cageMesh,
-    synchrotronMesh,
-    cagePatchCount: cageSelected.length,
-    synchrotronPatchCount: synchSelected.length,
-  };
-}
-
-function buildHubblePatches(root, image1999, image2024, budget, uniforms, seed){
-  const width = budget.structureSample;
-  const height = width;
-  const pixels1999 = imagePixels(image1999, width, height);
-  const pixels2024 = imagePixels(image2024, width, height);
-  const lum = luminancePixels(pixels2024);
-  const rnd = mulberry(hashStr(seed));
-  const candidates = [];
-
-  for (let y = 1; y < height-1; y++){
-    for (let x = 1; x < width-1; x++){
-      const q = y*width+x;
-      const light = lum[q];
-      if (light < .035) continue;
-      const offset = q*4;
-      const max = Math.max(pixels2024[offset], pixels2024[offset+1], pixels2024[offset+2]);
-      const min = Math.min(pixels2024[offset], pixels2024[offset+1], pixels2024[offset+2]);
-      const saturation = max ? (max-min)/max : 0;
-      const edge = Math.abs(lum[q-1]-lum[q+1])+
-        Math.abs(lum[q-width]-lum[q+width]);
-      // Very bright neutral compact sources belong to the aligned star layer.
-      if (light > .76 && saturation < .13 && edge > .16) continue;
-      const score = edge*1.7+saturation*.38+Math.sqrt(light)*.24;
-      if (score < .12) continue;
-      candidates.push({ x, y, score: score*(.82+rnd()*.36) });
-    }
-  }
-  candidates.sort((a, b) => b.score-a.score);
-  const selected = selectSeparated(
-    candidates, budget.hubbleGasPatches, budget.patchSeparationSq);
-  if (!selected.length) return null;
-
-  const positions = [], colors1999 = [], colors2024 = [];
-  const uvx = [], uvs = [], opacities = [], seeds = [], indices = [];
-  const cell = HUBBLE_WIDTH/width;
-  for (let i = 0; i < selected.length; i++){
-    const point = selected[i];
-    const u = point.x/(width-1), v = point.y/(height-1);
-    const nx = u*2-1, ny = (1-v)*2-1;
-    const ellipticalRadius = Math.min(1, Math.sqrt((nx/.94)**2 + (ny/.82)**2));
-    const shellDepth = Math.sqrt(Math.max(0, 1-ellipticalRadius*ellipticalRadius));
-    const centerX = (u-.5)*HUBBLE_WIDTH;
-    const centerY = (.5-v)*PHOTO_HEIGHT;
-    // Each sampled image feature becomes a torn tangent patch on the shell.
-    // uOrbit flattens that surface back into exact registered image coordinates.
-    const hemisphere = rnd() < .5 ? -1 : 1;
-    const centerZ = hemisphere*(3.5+shellDepth*17)+
-      Math.sin(centerX*.29-centerY*.21)*1.2;
-    const patchWidth = cell*(1.8+Math.min(1.45, point.score*1.25));
-    const patchHeight = patchWidth*(.40+rnd()*.34);
-    const angle = Math.atan2(centerY/PHOTO_HEIGHT, centerX/HUBBLE_WIDTH)+
-      Math.PI*.5+gaussian(rnd)*.22;
-    const cos = Math.cos(angle), sin = Math.sin(angle);
-    const offset = (point.y*width+point.x)*4;
-    const a = sampledColor(pixels1999, offset, 1.22);
-    const b = sampledColor(pixels2024, offset, 1.22);
-    const opacity = .17+rnd()*.17;
-    const patchSeed = rnd()*79;
-    const base = positions.length/3;
-    const corners = [
-      [-.57, -.41], [.54, -.49], [.60, .38], [-.48, .53],
-    ];
-    for (let j = 0; j < corners.length; j++){
-      const localX = corners[j][0]*patchWidth*(.87+rnd()*.24);
-      const localY = corners[j][1]*patchHeight*(.85+rnd()*.27);
+function makeIrregularShellGeometry(scope, {
+  radius,
+  axes,
+  phase,
+  role,
+  widthSegments = QUALITY.shellWidth,
+  heightSegments = QUALITY.shellHeight,
+}){
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  for (let y = 0; y <= heightSegments; y++){
+    const v = y/heightSegments;
+    const phi = v*Math.PI;
+    const sinPhi = Math.sin(phi);
+    for (let x = 0; x <= widthSegments; x++){
+      const u = x/widthSegments;
+      const theta = u*Math.PI*2;
+      const cellular =
+        .10*Math.sin(theta*3+phi*2.2+phase)+
+        .065*Math.sin(theta*7-phi*5.3+phase*.7)+
+        .035*Math.cos(theta*17+phi*11-phase*1.6);
+      const polarPinch = 1-.10*Math.pow(Math.abs(Math.cos(phi)), 1.7);
+      const r = radius*(1+cellular)*polarPinch;
       positions.push(
-        centerX+localX*cos-localY*sin,
-        centerY+localX*sin+localY*cos,
-        centerZ+hemisphere*localX/Math.max(.001, patchWidth)*1.15,
+        Math.cos(theta)*sinPhi*r*axes.x,
+        Math.cos(phi)*r*axes.y,
+        Math.sin(theta)*sinPhi*r*axes.z,
       );
-      colors1999.push(a.r, a.g, a.b);
-      colors2024.push(b.r, b.g, b.b);
-      uvx.push(u);
-      uvs.push(j === 0 || j === 3 ? 0 : 1, j < 2 ? 0 : 1);
-      opacities.push(opacity);
-      seeds.push(patchSeed);
+      uvs.push(u, v);
     }
-    indices.push(base, base+1, base+2);
-    if (rnd() > .20) indices.push(base, base+2, base+3);
   }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('aColor1999', new THREE.Float32BufferAttribute(colors1999, 3));
-  geometry.setAttribute('aColor2024', new THREE.Float32BufferAttribute(colors2024, 3));
-  geometry.setAttribute('aUvX', new THREE.Float32BufferAttribute(uvx, 1));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(opacities, 1));
-  geometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
+  const stride = widthSegments+1;
+  for (let y = 0; y < heightSegments; y++){
+    for (let x = 0; x < widthSegments; x++){
+      const a = y*stride+x;
+      const b = a+stride;
+      indices.push(a,b,a+1,b,b+1,a+1);
+    }
+  }
+  const geometry = scope.own(new THREE.BufferGeometry());
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs,2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
-  const material = new THREE.ShaderMaterial({
+  geometry.userData.indexedSurface = true;
+  geometry.userData.scientificRole = role;
+  return geometry;
+}
+
+function makeSurfaceMaterial(scope, {
+  name,
+  inner,
+  outer,
+  opacity,
+  cutout,
+  scale,
+  fresnel = 1.5,
+  blending = THREE.NormalBlending,
+}){
+  const material = scope.own(new THREE.ShaderMaterial({
+    name,
     uniforms: {
-      uOrbit: uniforms.uOrbit,
-      uOpacity: uniforms.uHubblePatchOpacity,
-      uEpoch: uniforms.uEpoch,
-      uCompare: uniforms.uCompare,
-      uCurtain: uniforms.uCurtain,
-      uBacktrace: uniforms.uBacktrace,
+      uTime: { value: 0 },
+      uOpacity: { value: opacity },
+      uInner: { value: new THREE.Color(inner) },
+      uOuter: { value: new THREE.Color(outer) },
+      uCutout: { value: cutout },
+      uScale: { value: scale },
+      uFresnel: { value: fresnel },
+      uWarm: { value: 0 },
     },
+    vertexShader: `
+      precision ${PRECISION} float;
+      varying vec3 vLocal;
+      varying vec3 vNormalView;
+      varying vec3 vView;
+      varying vec2 vUv;
+      void main(){
+        vLocal=position;
+        vUv=uv;
+        vec4 mv=modelViewMatrix*vec4(position,1.0);
+        vNormalView=normalize(normalMatrix*normal);
+        vView=normalize(-mv.xyz);
+        gl_Position=projectionMatrix*mv;
+      }`,
+    fragmentShader: `
+      precision ${PRECISION} float;
+      uniform float uTime;
+      uniform float uOpacity;
+      uniform vec3 uInner;
+      uniform vec3 uOuter;
+      uniform float uCutout;
+      uniform float uScale;
+      uniform float uFresnel;
+      uniform float uWarm;
+      varying vec3 vLocal;
+      varying vec3 vNormalView;
+      varying vec3 vView;
+      varying vec2 vUv;
+      void main(){
+        float a=sin(dot(vLocal,vec3(.71,1.13,.47))*uScale+uTime*.045);
+        float b=sin(dot(vLocal,vec3(-1.07,.31,.89))*uScale*1.67-uTime*.035);
+        float c=sin(vUv.x*47.0+vUv.y*29.0+sin(vUv.y*13.0)*2.2);
+        float cells=.50+a*.20+b*.18+c*.12;
+        // A broad transition keeps the gas volume porous without reducing it
+        // to isolated hard patches between the optical filaments.
+        float occupied=smoothstep(max(0.0,uCutout-.08),
+          min(.98,uCutout+.20),cells);
+        float facing=abs(dot(normalize(vNormalView),normalize(vView)));
+        float rim=pow(max(0.0,1.0-facing),uFresnel);
+        float ridge=smoothstep(.34,.78,cells);
+        float alpha=uOpacity*occupied*(.40+.60*rim)*(.72+.28*ridge);
+        if(alpha<.018) discard;
+        vec3 warm=vec3(1.0,.31,.10);
+        vec3 color=mix(uInner,uOuter,clamp(.18+rim*.58+cells*.20,0.0,1.0));
+        color=mix(color,mix(color,warm,.36),uWarm);
+        gl_FragColor=vec4(color*(.78+rim*.62+ridge*.14),alpha);
+      }`,
     transparent: true,
     depthWrite: false,
     depthTest: true,
-    blending: THREE.NormalBlending,
     side: THREE.DoubleSide,
-    vertexShader: `
-      attribute vec3 aColor1999;
-      attribute vec3 aColor2024;
-      attribute float aUvX;
-      attribute float aOpacity;
-      attribute float aSeed;
-      uniform float uOrbit;
-      uniform float uOpacity;
-      uniform float uEpoch;
-      uniform float uCompare;
-      uniform float uCurtain;
-      uniform float uBacktrace;
-      varying vec2 vUv;
-      varying vec3 vColor;
-      varying float vOpacity;
-      varying float vSeed;
-      void main(){
-        float side = smoothstep(uCurtain-.006, uCurtain+.006, aUvX);
-        float epoch = mix(uEpoch, side, uCompare);
-        vUv = uv;
-        vColor = mix(aColor1999, aColor2024, epoch);
-        vOpacity = uOpacity*uOrbit*aOpacity;
-        vSeed = aSeed;
-        vec3 p = position;
-        p.xy *= mix(1.0, .70, uBacktrace);
-        p.z *= mix(uOrbit, uOrbit*.35, uBacktrace);
-        vec4 mv = modelViewMatrix*vec4(p, 1.0);
-        gl_Position = projectionMatrix*mv;
-      }`,
-    fragmentShader: `
-      varying vec2 vUv;
-      varying vec3 vColor;
-      varying float vOpacity;
-      varying float vSeed;
-      float hash12(vec2 p){
-        vec3 p3 = fract(vec3(p.xyx)*.1031);
-        p3 += dot(p3, p3.yzx+33.33);
-        return fract((p3.x+p3.y)*p3.z);
-      }
-      void main(){
-        float edge = min(min(vUv.x, 1.0-vUv.x),
-                         min(vUv.y, 1.0-vUv.y));
-        float edgeMask = smoothstep(.015, .14, edge);
-        float grain = hash12(floor(vUv*vec2(8.0, 6.0))+vSeed);
-        if (grain < .13 || edgeMask < .01) discard;
-        float alpha = vOpacity*edgeMask*(.78+grain*.22);
-        gl_FragColor = vec4(vColor*(.74+grain*.22), alpha);
-      }`,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = 'registered-hubble-filament-patch-mesh';
-  mesh.renderOrder = 5;
-  mesh.visible = false;
-  root.add(mesh);
-  return { mesh, patchCount: selected.length };
+    blending,
+    toneMapped: false,
+  }));
+  material.userData.baseOpacity = opacity;
+  material.userData.scientificRole = name;
+  return material;
 }
 
-function buildFilamentSheets(root, rnd, count, uniforms){
-  const positions = [], colorsHubble = [], colorsWebb = [];
-  const phases = [], opacities = [], uvs = [], indices = [];
-  const hubblePalette = [0x6caeb0, 0xa95f68, 0xbb8259, 0x705985];
-  const webbPalette = [0x5266a6, 0x914e70, 0xa9533d, 0xb27948];
+function ellipsoidPoint(latitude, longitude, axes, radial = 1){
+  const cosLat = Math.cos(latitude);
+  return new THREE.Vector3(
+    Math.cos(longitude)*cosLat*axes.x*radial,
+    Math.sin(latitude)*axes.y*radial,
+    Math.sin(longitude)*cosLat*axes.z*radial,
+  );
+}
 
-  function appendStrip(points, width, colorHubble, colorWebb, phase, opacity){
+/* One indexed surface contains local, broad, torn filament ribbons. Paths use
+   offset Catmull-Rom control points and cover only a neighborhood of the
+   remnant: no pole-to-pole or latitude/longitude rails that could read as a
+   wireframe cage. Golden-angle anchors keep the bundles distributed without
+   making a triangular lattice. */
+function makeFilamentCageGeometry(scope, rnd){
+  const positions = [];
+  const colors = [];
+  const uvs = [];
+  const seeds = [];
+  const indices = [];
+  const axes = new THREE.Vector3(38,31,22);
+  const palette = [0xff7d42,0xe44937,0xffb05a,0xb83c62,0xf06635,0xffc06a];
+  const point = new THREE.Vector3();
+  const before = new THREE.Vector3();
+  const after = new THREE.Vector3();
+  const tangent = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+  const across = new THREE.Vector3();
+
+  function appendPath(path, width, color, seed){
     const base = positions.length/3;
-    for (let j = 0; j < points.length; j++){
-      const t = j/(points.length-1);
-      const taper = .10+.90*Math.pow(Math.sin(Math.PI*t), .52);
-      const point = points[j];
-      const before = points[Math.max(0, j-1)];
-      const after = points[Math.min(points.length-1, j+1)];
-      const tangent = after.clone().sub(before).normalize();
-      const radial = new THREE.Vector3(
-        point.x/40, point.y/34, point.z/24).normalize();
-      const across = radial.cross(tangent).normalize();
-      const tornWidth = width*taper*(.78+.22*Math.sin(t*31+phase));
-      for (let side = -1; side <= 1; side += 2){
+    for (let j = 0; j < path.length; j++){
+      const t = j/(path.length-1);
+      point.copy(path[j]);
+      before.copy(path[Math.max(0,j-1)]);
+      after.copy(path[Math.min(path.length-1,j+1)]);
+      tangent.copy(after).sub(before).normalize();
+      normal.set(point.x/(axes.x*axes.x),point.y/(axes.y*axes.y),
+        point.z/(axes.z*axes.z)).normalize();
+      across.copy(normal).cross(tangent).normalize();
+      const taper=.10+.90*Math.pow(Math.sin(Math.PI*t),.38);
+      const bulge=.72+.28*Math.sin(Math.PI*t*(1+(Math.floor(seed)%2))+
+        seed*.37);
+      const torn=1+.19*Math.sin(t*23+seed)+.10*Math.sin(t*61-seed*.7);
+      for (const side of [-1,1]){
+        const asymmetric=side<0?.82+rnd()*.24:.94+rnd()*.28;
+        const edge=side*width*taper*bulge*torn*asymmetric;
         positions.push(
-          point.x+across.x*side*tornWidth,
-          point.y+across.y*side*tornWidth,
-          point.z+across.z*side*tornWidth,
+          point.x+across.x*edge+normal.x*Math.sin(t*29+seed)*.16,
+          point.y+across.y*edge+normal.y*Math.sin(t*29+seed)*.16,
+          point.z+across.z*edge+normal.z*Math.sin(t*29+seed)*.16,
         );
-        uvs.push(side < 0 ? 0 : 1, t);
-        colorsHubble.push(colorHubble.r, colorHubble.g, colorHubble.b);
-        colorsWebb.push(colorWebb.r, colorWebb.g, colorWebb.b);
-        phases.push(phase);
-        opacities.push(opacity);
+        colors.push(color.r,color.g,color.b);
+        uvs.push(side<0?0:1,t);
+        seeds.push(seed);
       }
     }
-    for (let j = 0; j < points.length-1; j++){
-      const a = base+j*2, b = a+1, c = a+2, d = a+3;
-      indices.push(a, b, c, b, d, c);
+    for (let j = 0; j < path.length-1; j++){
+      const a=base+j*2;
+      indices.push(a,a+1,a+2,a+1,a+3,a+2);
     }
   }
 
-  for (let i = 0; i < count; i++){
-    const angle = rnd()*Math.PI*2;
-    const latitude = (rnd()-.5)*1.35;
-    const phase = rnd()*Math.PI*2;
-    const points = [];
-    const steps = 14;
-    const span = .30+rnd()*.50;
-    const verticalSpan = 8+rnd()*12;
-    for (let j = 0; j < steps; j++){
-      const t = j/(steps-1)-.5;
-      const a = angle+t*span+Math.sin(t*8+phase)*.035;
-      const swell = 1+Math.sin(t*Math.PI+phase)*.08;
-      const y = latitude*34+t*verticalSpan+Math.sin(t*9+phase)*1.4;
-      // Webb shows the outer cage bending inward at the equatorial waist.
-      // Apply that pinch to the filament paths while retaining corrugation.
-      const waist = .72+.28*Math.pow(Math.min(1, Math.abs(y)/38), .62);
-      points.push(new THREE.Vector3(
-        Math.cos(a)*40*swell*waist,
-        y,
-        Math.sin(a)*24*swell*waist+Math.cos(t*7+phase)*1.55,
-      ));
+  const goldenAngle=Math.PI*(3-Math.sqrt(5));
+  for (let i=0;i<QUALITY.filamentPaths;i++){
+    const phase=rnd()*Math.PI*2;
+    const anchorFraction=(i+.5)/QUALITY.filamentPaths;
+    const anchorLatitude=Math.asin(anchorFraction*2-1)*.76+gaussian(rnd)*.045;
+    const anchorLongitude=i*goldenAngle+(rnd()-.5)*.34;
+    const heading=rnd()*Math.PI*2;
+    const span=.52+rnd()*.72;
+    const latitudeRun=Math.cos(heading)*span*.62;
+    const longitudeRun=Math.sin(heading)*span/
+      Math.max(.52,Math.cos(anchorLatitude));
+    const controlPoints=[];
+    const controlCount=5+(i%3);
+    for(let control=0;control<controlCount;control++){
+      const s=control/(controlCount-1)-.5;
+      const bend=Math.sin((s+.5)*Math.PI*2+phase)*(.075+rnd()*.055);
+      const counterBend=Math.sin((s+.5)*Math.PI*3-phase*.63)*
+        (.075+rnd()*.070);
+      const latitude=THREE.MathUtils.clamp(
+        anchorLatitude+latitudeRun*s+bend+gaussian(rnd)*.025,-1.28,1.28);
+      const longitude=anchorLongitude+longitudeRun*s+counterBend+
+        gaussian(rnd)*.035;
+      const radial=.91+.055*Math.sin(s*Math.PI*3+phase)+
+        .025*Math.sin(s*Math.PI*7-phase*.4)+gaussian(rnd)*.012;
+      controlPoints.push(ellipsoidPoint(latitude,longitude,axes,radial));
     }
-    const hubble = new THREE.Color(hubblePalette[i%hubblePalette.length]);
-    const webb = new THREE.Color(webbPalette[(i+1)%webbPalette.length]);
-    const width = 1.15+rnd()*1.55;
-    // One broad sheet per physical path. The previous paired strips read as
-    // two neon rails and exaggerated the cage into spaghetti.
-    appendStrip(points, width, hubble, webb, phase, .055+rnd()*.065);
+    const curve=new THREE.CatmullRomCurve3(controlPoints,false,'centripetal',.45);
+    const steps=QUALITY.filamentSteps+(i%3)*3;
+    const path=curve.getPoints(steps-1);
+    const color=new THREE.Color(palette[i%palette.length]);
+    const width=1.15+rnd()*1.85;
+    appendPath(path,width,color,phase+i*.31);
   }
 
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setAttribute('aColorHubble', new THREE.Float32BufferAttribute(colorsHubble, 3));
-  geometry.setAttribute('aColorWebb', new THREE.Float32BufferAttribute(colorsWebb, 3));
-  geometry.setAttribute('aPhase', new THREE.Float32BufferAttribute(phases, 1));
-  geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(opacities, 1));
+  const geometry=scope.own(new THREE.BufferGeometry());
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geometry.setAttribute('aSeed',new THREE.Float32BufferAttribute(seeds,1));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.indexedSurface=true;
+  geometry.userData.scientificRole='three-dimensional-optical-filament-ribbon-cage';
+  return geometry;
+}
+
+function makeFilamentMaterial(scope){
+  const material=scope.own(new THREE.ShaderMaterial({
+    name:'Crab.FilamentRibbonMaterial',
+    uniforms:{
+      uTime:{value:0},
+      uOpacity:{value:1},
+      uWarm:{value:0},
+    },
+    vertexShader:`
+      precision ${PRECISION} float;
+      attribute float aSeed;
+      varying vec3 vColor;
+      varying vec3 vNormalView;
+      varying vec3 vView;
+      varying vec2 vUv;
+      varying float vSeed;
+      void main(){
+        vColor=color;
+        vUv=uv;
+        vSeed=aSeed;
+        vec4 mv=modelViewMatrix*vec4(position,1.0);
+        vNormalView=normalize(normalMatrix*normal);
+        vView=normalize(-mv.xyz);
+        gl_Position=projectionMatrix*mv;
+      }`,
+    fragmentShader:`
+      precision ${PRECISION} float;
+      uniform float uTime;
+      uniform float uOpacity;
+      uniform float uWarm;
+      varying vec3 vColor;
+      varying vec3 vNormalView;
+      varying vec3 vView;
+      varying vec2 vUv;
+      varying float vSeed;
+      float hash21(vec2 p){
+        p=fract(p*vec2(123.34,456.21));
+        p+=dot(p,p+45.32);
+        return fract(p.x*p.y);
+      }
+      void main(){
+        float edge=smoothstep(.015,.18,min(vUv.x,1.0-vUv.x));
+        float ends=smoothstep(0.0,.055,vUv.y)*smoothstep(0.0,.055,1.0-vUv.y);
+        float cellular=.55+.27*sin(vUv.y*31.0+vSeed)+
+          .18*sin(vUv.y*73.0-vSeed*.7);
+        float grain=hash21(floor(vUv*vec2(8.0,67.0))+vSeed);
+        float brokenArc=.5+.5*sin(vUv.y*(12.0+mod(vSeed,6.0))+vSeed*1.7);
+        if(cellular+grain*.20<.28||brokenArc<.075) discard;
+        float facing=abs(dot(normalize(vNormalView),normalize(vView)));
+        float ridge=pow(max(0.0,1.0-facing),1.15);
+        vec3 warm=vec3(1.0,.25,.07);
+        vec3 color=mix(vColor,mix(vColor,warm,.42),uWarm);
+        float alpha=uOpacity*edge*ends*(.72+.28*grain)*(.74+.26*ridge);
+        if(alpha<.025) discard;
+        gl_FragColor=vec4(color*(.76+ridge*.46+cellular*.14),alpha);
+      }`,
+    vertexColors:true,
+    transparent:true,
+    depthWrite:false,
+    depthTest:true,
+    side:THREE.DoubleSide,
+    blending:THREE.NormalBlending,
+    toneMapped:false,
+  }));
+  material.userData.baseOpacity=1;
+  return material;
+}
+
+function addFilamentKnots(scope,parent,rnd){
+  const geometry=scope.own(new THREE.IcosahedronGeometry(1,1));
+  geometry.userData.scientificRole='faceted-optical-filament-knot-prototype';
+  const material=scope.own(new THREE.MeshStandardMaterial({
+    name:'Crab.FilamentKnotMaterial',
+    color:0xffffff,
+    emissive:0x7d1f12,
+    emissiveIntensity:1.65,
+    roughness:.63,
+    metalness:.02,
+    flatShading:true,
+    vertexColors:true,
+    transparent:true,
+    opacity:.86,
+    depthWrite:false,
+    toneMapped:false,
+  }));
+  const mesh=scope.own(new THREE.InstancedMesh(
+    geometry,material,QUALITY.filamentKnots));
+  mesh.name='Crab.FacetedFilamentKnots';
+  mesh.userData.instanceRole='dense-optical-ejecta-knots';
+  const dummy=new THREE.Object3D();
+  const palette=[0xff6a3d,0xffad58,0xd83442,0x5ec8c2,0xff7759];
+  for(let i=0;i<QUALITY.filamentKnots;i++){
+    const latitude=Math.asin(rnd()*2-1)*.92;
+    const longitude=rnd()*Math.PI*2;
+    const radial=.79+Math.pow(rnd(),.55)*.20;
+    dummy.position.copy(ellipsoidPoint(latitude,longitude,
+      new THREE.Vector3(38,31,22),radial));
+    dummy.position.x+=gaussian(rnd)*.42;
+    dummy.position.y+=gaussian(rnd)*.42;
+    dummy.position.z+=gaussian(rnd)*.30;
+    dummy.rotation.set(rnd()*Math.PI,rnd()*Math.PI,rnd()*Math.PI);
+    const scale=.18+Math.pow(rnd(),2.1)*.82;
+    dummy.scale.set(scale*(.62+rnd()*.82),scale*(.54+rnd()*.96),
+      scale*(.58+rnd()*.70));
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i,dummy.matrix);
+    mesh.setColorAt(i,new THREE.Color(palette[i%palette.length]));
+  }
+  mesh.instanceMatrix.needsUpdate=true;
+  if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
+  mesh.renderOrder=6;
+  parent.add(mesh);
+  return {mesh,material};
+}
+
+function makeEllipticalTubeGeometry(scope,{
+  radiusX,
+  radiusY,
+  tube,
+  segments=QUALITY.tubeSegments,
+  crossSegments=QUALITY.tubeCrossSegments,
+  phase=0,
+  role,
+}){
+  const positions=[];
+  const normals=[];
+  const uvs=[];
+  const indices=[];
+  for(let ring=0;ring<=segments;ring++){
+    const u=ring/segments;
+    const theta=u*Math.PI*2;
+    const cx=Math.cos(theta)*radiusX;
+    const cy=Math.sin(theta)*radiusY;
+    const cz=Math.sin(theta*5+phase)*.18;
+    const radial=new THREE.Vector3(Math.cos(theta),Math.sin(theta),0).normalize();
+    const corrugation=1+.13*Math.sin(theta*13+phase)+.055*Math.sin(theta*31-phase);
+    for(let side=0;side<=crossSegments;side++){
+      const v=side/crossSegments;
+      const phi=v*Math.PI*2;
+      const normal=radial.clone().multiplyScalar(Math.cos(phi))
+        .addScaledVector(new THREE.Vector3(0,0,1),Math.sin(phi)).normalize();
+      const r=tube*corrugation*(1+.08*Math.sin(phi*3+theta*7));
+      positions.push(cx+normal.x*r,cy+normal.y*r,cz+normal.z*r);
+      normals.push(normal.x,normal.y,normal.z);
+      uvs.push(u,v);
+    }
+  }
+  const stride=crossSegments+1;
+  for(let ring=0;ring<segments;ring++){
+    for(let side=0;side<crossSegments;side++){
+      const a=ring*stride+side;
+      const b=a+stride;
+      indices.push(a,b,a+1,b,b+1,a+1);
+    }
+  }
+  const geometry=scope.own(new THREE.BufferGeometry());
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
   geometry.setIndex(indices);
   geometry.computeBoundingSphere();
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      uOpacity: uniforms.uFilamentOpacity,
-      uWebb: uniforms.uWebbMix,
-      uTime: uniforms.uTime,
-      uOrbit: uniforms.uOrbit,
+  geometry.userData.indexedSurface=true;
+  geometry.userData.scientificRole=role;
+  return geometry;
+}
+
+function makeArcRibbonGeometry(scope,{
+  inner,
+  outer,
+  start,
+  span,
+  z,
+  phase,
+  role,
+}){
+  const positions=[];
+  const uvs=[];
+  const indices=[];
+  for(let i=0;i<=QUALITY.wispSegments;i++){
+    const u=i/QUALITY.wispSegments;
+    const theta=start+u*span;
+    const wobble=Math.sin(theta*7+phase)*.16;
+    for(const side of [0,1]){
+      const radius=THREE.MathUtils.lerp(inner,outer,side)+
+        Math.sin(theta*11+phase)*.10;
+      positions.push(Math.cos(theta)*radius,Math.sin(theta)*radius,
+        z+wobble+(side-.5)*.12);
+      uvs.push(u,side);
+    }
+  }
+  for(let i=0;i<QUALITY.wispSegments;i++){
+    const a=i*2;
+    indices.push(a,a+1,a+2,a+1,a+3,a+2);
+  }
+  const geometry=scope.own(new THREE.BufferGeometry());
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.indexedSurface=true;
+  geometry.userData.scientificRole=role;
+  return geometry;
+}
+
+function makeJetSurfaceGeometry(scope,{direction,role}){
+  const positions=[];
+  const uvs=[];
+  const indices=[];
+  for(let y=0;y<=QUALITY.jetLengthSegments;y++){
+    const v=y/QUALITY.jetLengthSegments;
+    const axial=direction*(2.0+v*27);
+    const radius=.58+v*.78+.24*Math.sin(v*Math.PI*5.5);
+    const cx=Math.sin(v*8.2)*.34*v;
+    const cy=Math.sin(v*5.7+1.3)*.28*v;
+    for(let x=0;x<=QUALITY.jetRadialSegments;x++){
+      const u=x/QUALITY.jetRadialSegments;
+      const theta=u*Math.PI*2;
+      const patch=1+.13*Math.sin(theta*5+v*19)+.07*Math.sin(theta*11-v*9);
+      positions.push(cx+Math.cos(theta)*radius*patch,
+        cy+Math.sin(theta)*radius*patch,axial);
+      uvs.push(u,v);
+    }
+  }
+  const stride=QUALITY.jetRadialSegments+1;
+  for(let y=0;y<QUALITY.jetLengthSegments;y++){
+    for(let x=0;x<QUALITY.jetRadialSegments;x++){
+      const a=y*stride+x;
+      const b=a+stride;
+      indices.push(a,b,a+1,b,b+1,a+1);
+    }
+  }
+  const geometry=scope.own(new THREE.BufferGeometry());
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.userData.indexedSurface=true;
+  geometry.userData.scientificRole=role;
+  return geometry;
+}
+
+function makeEngineMaterial(scope,{name,inner,outer,opacity,segments,cutout}){
+  const material=scope.own(new THREE.ShaderMaterial({
+    name,
+    uniforms:{
+      uTime:{value:0},
+      uOpacity:{value:opacity},
+      uInner:{value:new THREE.Color(inner)},
+      uOuter:{value:new THREE.Color(outer)},
+      uSegments:{value:segments},
+      uCutout:{value:cutout},
     },
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-    side: THREE.DoubleSide,
-    blending: THREE.NormalBlending,
-    vertexShader: `
-      attribute vec3 aColorHubble;
-      attribute vec3 aColorWebb;
-      attribute float aPhase;
-      attribute float aOpacity;
+    vertexShader:`
+      precision ${PRECISION} float;
       varying vec2 vUv;
-      varying vec3 vColorHubble;
-      varying vec3 vColorWebb;
-      varying float vPhase;
-      varying float vOpacity;
+      varying vec3 vNormalView;
+      varying vec3 vView;
       void main(){
-        vUv = uv;
-        vColorHubble = aColorHubble;
-        vColorWebb = aColorWebb;
-        vPhase = aPhase;
-        vOpacity = aOpacity;
-        gl_Position = projectionMatrix*modelViewMatrix*vec4(position, 1.0);
+        vUv=uv;
+        vec4 mv=modelViewMatrix*vec4(position,1.0);
+        vNormalView=normalize(normalMatrix*normal);
+        vView=normalize(-mv.xyz);
+        gl_Position=projectionMatrix*mv;
       }`,
-    fragmentShader: `
-      uniform float uOpacity;
-      uniform float uWebb;
+    fragmentShader:`
+      precision ${PRECISION} float;
       uniform float uTime;
-      uniform float uOrbit;
-      varying vec2 vUv;
-      varying vec3 vColorHubble;
-      varying vec3 vColorWebb;
-      varying float vPhase;
-      varying float vOpacity;
-      float hash12(vec2 p){
-        vec3 p3 = fract(vec3(p.xyx)*.1031);
-        p3 += dot(p3, p3.yzx+33.33);
-        return fract((p3.x+p3.y)*p3.z);
-      }
-      void main(){
-        float edge = smoothstep(.015, .16, min(vUv.x, 1.0-vUv.x));
-        float ends = smoothstep(0.0, .10, vUv.y)*
-                     smoothstep(0.0, .10, 1.0-vUv.y);
-        float flow = .52+.48*sin(vUv.y*27.0-uTime*.10+vPhase);
-        float grain = hash12(floor(vUv*vec2(11.0, 38.0))+vPhase);
-        if (grain+flow*.16 < .28) discard;
-        float torn = smoothstep(.24, .74, grain+flow*.15);
-        vec3 color = mix(vColorHubble, vColorWebb, uWebb)*(.72+flow*.18);
-        gl_FragColor = vec4(
-          color, uOpacity*uOrbit*vOpacity*edge*ends*(.42+torn*.58));
-      }`,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = 'broad-torn-filament-sheets';
-  mesh.renderOrder = 4;
-  mesh.visible = false;
-  root.add(mesh);
-  return { mesh, material };
-}
-
-function buildSupernova(root, rnd, count, glowTexture){
-  const positions = new Float32Array(count*3);
-  const colors = new Float32Array(count*3);
-  const warm = new THREE.Color(0xffb45e);
-  const cool = new THREE.Color(0x69bfff);
-  for (let i = 0; i < count; i++){
-    const u = rnd()*2-1, angle = rnd()*Math.PI*2;
-    const s = Math.sqrt(1-u*u);
-    const radius = .82+Math.pow(rnd(), 4)*.22;
-    positions[i*3] = s*Math.cos(angle)*radius;
-    positions[i*3+1] = u*radius;
-    positions[i*3+2] = s*Math.sin(angle)*radius;
-    const color = warm.clone().lerp(cool, rnd()*.52);
-    colors.set([color.r, color.g, color.b], i*3);
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const material = new THREE.PointsMaterial({
-    size: .72,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0,
-    map: glowTexture,
-    alphaTest: .015,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const shell = new THREE.Points(geometry, material);
-  shell.name = 'illustrative-supernova-ejecta';
-  shell.userData.allowedPointRole = 'transient-supernova-ejecta';
-  root.add(shell);
-
-  const shockMaterial = new THREE.ShaderMaterial({
-    uniforms: { uOpacity: { value: 0 }, uColor: { value: new THREE.Color(0x5baee9) } },
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
-    vertexShader: `
-      varying vec3 vNormal;
-      varying vec3 vView;
-      void main(){
-        vec4 mv = modelViewMatrix*vec4(position, 1.0);
-        vNormal = normalize(normalMatrix*normal);
-        vView = normalize(-mv.xyz);
-        gl_Position = projectionMatrix*mv;
-      }`,
-    fragmentShader: `
       uniform float uOpacity;
-      uniform vec3 uColor;
-      varying vec3 vNormal;
+      uniform vec3 uInner;
+      uniform vec3 uOuter;
+      uniform float uSegments;
+      uniform float uCutout;
+      varying vec2 vUv;
+      varying vec3 vNormalView;
       varying vec3 vView;
       void main(){
-        float rim = pow(1.0-abs(dot(normalize(vNormal), normalize(vView))), 3.0);
-        gl_FragColor = vec4(uColor*(.45+rim), uOpacity*rim);
+        float clumps=.52+.30*sin(vUv.x*uSegments*6.28318-uTime*.28)+
+          .18*sin(vUv.x*uSegments*13.0+vUv.y*8.0+uTime*.17);
+        float crossGlow=.58+.42*sin(vUv.y*6.28318)*sin(vUv.y*6.28318);
+        if(clumps<uCutout) discard;
+        float facing=abs(dot(normalize(vNormalView),normalize(vView)));
+        float rim=pow(max(0.0,1.0-facing),1.15);
+        vec3 color=mix(uInner,uOuter,clamp(.20+rim*.56+clumps*.20,0.0,1.0));
+        float alpha=uOpacity*(.62+.38*rim)*crossGlow;
+        if(alpha<.018) discard;
+        gl_FragColor=vec4(color*(1.0+rim*.72+clumps*.18),alpha);
       }`,
-  });
-  const shock = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 28), shockMaterial);
-  shock.name = 'illustrative-shock-front';
-  root.add(shock);
-
-  const flashMaterial = new THREE.SpriteMaterial({
-    map: glowTexture,
-    color: 0xffd9a2,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  const flash = new THREE.Sprite(flashMaterial);
-  flash.name = 'illustrative-supernova-flash';
-  root.add(flash);
-  return { shell, material, shock, shockMaterial, flash, flashMaterial };
+    transparent:true,
+    depthWrite:false,
+    depthTest:true,
+    side:THREE.DoubleSide,
+    blending:THREE.AdditiveBlending,
+    toneMapped:false,
+  }));
+  material.userData.baseOpacity=opacity;
+  return material;
 }
 
-function buildPulsarEngine(root, glowTexture, low){
-  const group = new THREE.Group();
-  group.name = 'pulsar-engine-context';
-  group.rotation.set(.42, -.28, .12);
-  root.add(group);
-  const materials = [];
+function buildPulsarEngine(scope,parent){
+  const root=new THREE.Group();
+  root.name='Crab.PulsarWindEngine';
+  root.rotation.set(.24,-.34,.10);
+  // The termination shock is physically tiny beside the optical remnant.
+  // It is still display-scale exaggerated, but must read as its compact engine
+  // rather than touching or clipping through the outer filament cage.
+  root.scale.setScalar(.80);
+  parent.add(root);
 
-  function surfaceMaterial(color, opacity){
-    const material = new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.NormalBlending,
-    });
-    material.userData.baseOpacity = opacity;
-    materials.push(material);
-    return material;
-  }
+  const innerMaterial=makeEngineMaterial(scope,{
+    name:'Crab.TerminationShockMaterial',inner:0xeefcff,outer:0x4fbfff,
+    opacity:.92,segments:13,cutout:.22,
+  });
+  const outerMaterial=makeEngineMaterial(scope,{
+    name:'Crab.OuterWindRingMaterial',inner:0xaed9ff,outer:0x7b4ce1,
+    opacity:.58,segments:9,cutout:.34,
+  });
+  const wispMaterial=makeEngineMaterial(scope,{
+    name:'Crab.MovingWispMaterial',inner:0xdaf8ff,outer:0x4d72dc,
+    opacity:.48,segments:7,cutout:.28,
+  });
+  const jetMaterial=makeEngineMaterial(scope,{
+    name:'Crab.PolarJetMaterial',inner:0xe8fbff,outer:0x3a8dd8,
+    opacity:.56,segments:11,cutout:.32,
+  });
 
-  const torusMaterial = surfaceMaterial(0x5c8fff, .085);
-  const torus = new THREE.Mesh(new THREE.RingGeometry(5.8, 10.2,
-    low ? 48 : 88,3), torusMaterial);
-  torus.name = 'broad-equatorial-pulsar-flow-surface';
-  group.add(torus);
-  const outerMaterial = surfaceMaterial(0x9a62eb, .045);
-  const outer = new THREE.Mesh(new THREE.RingGeometry(10.8, 15.3,
-    low ? 48 : 88,2,Math.PI*.12,Math.PI*1.72), outerMaterial);
-  outer.name = 'broken-outer-pulsar-flow-surface';
-  outer.scale.y = .72;
-  group.add(outer);
+  const inner=new THREE.Mesh(makeEllipticalTubeGeometry(scope,{
+    radiusX:6.5,radiusY:4.1,tube:.52,phase:.3,
+    role:'indexed-pulsar-termination-shock-tube',
+  }),innerMaterial);
+  inner.name='Crab.IndexedTerminationShock';
+  inner.renderOrder=9;
+  root.add(inner);
 
-  // Hubble/Webb show nested ripple-like wisps moving away from the pulsar.
-  // Broad annular sectors carry them as surfaces, never tube outlines.
-  const wisps = [];
-  for (let i = 0; i < (low ? 3 : 6); i++){
-    const wispMaterial = surfaceMaterial(i%2 ? 0x78b7ff : 0x8b72e8,
-      .030+i*.004);
-    const arc = Math.PI*(1.02+(i%3)*.18);
-    const wisp = new THREE.Mesh(
-      new THREE.RingGeometry(4.1+i*1.34,5.0+i*1.34,
-        low ? 36 : 64,2,.18+i*.19,arc),
-      wispMaterial,
-    );
-    wisp.rotation.z = -.72+i*.52;
-    wisp.position.set((i%2 ? 1 : -1)*.42, (i-2.5)*.24, (i%3-1)*.30);
-    wisp.scale.y = .62+i*.025;
-    group.add(wisp);
+  const outer=new THREE.Mesh(makeEllipticalTubeGeometry(scope,{
+    radiusX:10.1,radiusY:6.1,tube:.42,phase:1.7,
+    role:'indexed-outer-pulsar-wind-tube',
+  }),outerMaterial);
+  outer.name='Crab.IndexedOuterWindRing';
+  outer.rotation.z=-.08;
+  outer.renderOrder=8;
+  root.add(outer);
+
+  const wisps=[];
+  for(let i=0;i<5;i++){
+    const wisp=new THREE.Mesh(makeArcRibbonGeometry(scope,{
+      inner:4.4+i*1.25,
+      outer:5.2+i*1.25,
+      start:.20+i*.81,
+      span:Math.PI*(.62+(i%2)*.16),
+      z:(i-2)*.22,
+      phase:i*.87,
+      role:'indexed-moving-pulsar-wisp-surface',
+    }),wispMaterial);
+    wisp.name=`Crab.IndexedMovingWisp.${i+1}`;
+    wisp.renderOrder=8;
+    root.add(wisp);
     wisps.push(wisp);
   }
 
-  const jetMaterial = surfaceMaterial(0x54b9ff, .055);
-  for (const direction of [-1, 1]){
-    const jet = new THREE.Mesh(new THREE.ConeGeometry(2.35, 23,
-      low ? 12 : 18,1,true), jetMaterial);
-    jet.name = 'broad-pulsar-jet-outflow-surface';
-    jet.rotation.x = Math.PI/2;
-    jet.position.z = direction*11.5;
-    if (direction < 0) jet.rotation.y = Math.PI;
-    group.add(jet);
+  const jets=[];
+  for(const direction of [-1,1]){
+    const jet=new THREE.Mesh(makeJetSurfaceGeometry(scope,{
+      direction,
+      role:direction>0?'northwest-pulsar-jet-surface':'southeast-counterjet-surface',
+    }),jetMaterial);
+    jet.name=direction>0?'Crab.IndexedNorthwestJet':'Crab.IndexedSoutheastCounterjet';
+    jet.renderOrder=7;
+    root.add(jet);
+    jets.push(jet);
   }
 
-  const coreMaterial = new THREE.MeshBasicMaterial({ color: 0xe9f3ff });
-  coreMaterial.userData.baseOpacity = 1;
-  coreMaterial.transparent = true;
-  coreMaterial.opacity = 0;
-  materials.push(coreMaterial);
-  const core = new THREE.Mesh(new THREE.SphereGeometry(.75, 24, 16), coreMaterial);
-  group.add(core);
+  const coreMaterial=scope.own(new THREE.MeshPhysicalMaterial({
+    name:'Crab.PulsarCoreMaterial',
+    color:0xf4fbff,
+    emissive:0x7fd4ff,
+    emissiveIntensity:4.2,
+    roughness:.22,
+    metalness:.03,
+    clearcoat:.4,
+    toneMapped:false,
+  }));
+  const coreGeometry=scope.own(new THREE.IcosahedronGeometry(.72,3));
+  coreGeometry.userData.scientificRole='display-scale-exaggerated-crab-pulsar';
+  const core=new THREE.Mesh(coreGeometry,coreMaterial);
+  core.name='Crab.CentralPulsar';
+  core.userData.displayScaleExaggerated=true;
+  core.renderOrder=12;
+  root.add(core);
 
-  const glowMaterial = new THREE.SpriteMaterial({
-    map: glowTexture,
-    color: 0x7eb9ff,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  glowMaterial.userData.baseOpacity = .28;
-  materials.push(glowMaterial);
-  const glow = new THREE.Sprite(glowMaterial);
-  glow.scale.set(9, 9, 1);
-  group.add(glow);
-  return { group, materials, core, torus, outer, wisps, glow };
+  return {
+    root,inner,outer,wisps,jets,core,coreMaterial,
+    materials:[innerMaterial,outerMaterial,wispMaterial,jetMaterial],
+  };
 }
 
-function disposeMaterial(material){
-  if (!material) return;
-  const materials = Array.isArray(material) ? material : [material];
-  for (const value of materials){
-    for (const key of Object.keys(value)){
-      const candidate = value[key];
-      if (candidate && candidate.isTexture) candidate.dispose();
-    }
-    value.dispose();
+function buildHistoricalBlast(scope,parent,rnd){
+  const root=new THREE.Group();
+  root.name='Crab.SN1054IndexedExplosionReconstruction';
+  parent.add(root);
+  const shellMaterial=makeSurfaceMaterial(scope,{
+    name:'Crab.SN1054RaggedShockMaterial',inner:0xffffff,outer:0xff6b24,
+    opacity:.94,cutout:.43,scale:.72,fresnel:1.1,
+    blending:THREE.AdditiveBlending,
+  });
+  const shellGeometry=makeIrregularShellGeometry(scope,{
+    radius:11,
+    axes:new THREE.Vector3(1.04,.90,.96),
+    phase:4.2,
+    widthSegments:Math.max(42,Math.round(QUALITY.shellWidth*.62)),
+    heightSegments:Math.max(26,Math.round(QUALITY.shellHeight*.62)),
+    role:'compact-ragged-1054-explosion-front',
+  });
+  const shell=new THREE.Mesh(shellGeometry,shellMaterial);
+  shell.name='Crab.SN1054RaggedShockFront';
+  shell.renderOrder=10;
+  root.add(shell);
+
+  const shardGeometry=scope.own(new THREE.TetrahedronGeometry(1,1));
+  shardGeometry.userData.scientificRole='faceted-early-ejecta-shard-prototype';
+  const shardMaterial=scope.own(new THREE.MeshStandardMaterial({
+    name:'Crab.SN1054ShardMaterial',
+    color:0xffb056,
+    emissive:0xff3b11,
+    emissiveIntensity:2.8,
+    roughness:.58,
+    flatShading:true,
+    transparent:true,
+    opacity:0,
+    depthWrite:false,
+    toneMapped:false,
+  }));
+  const shards=scope.own(new THREE.InstancedMesh(
+    shardGeometry,shardMaterial,QUALITY.blastShards));
+  shards.name='Crab.SN1054FacetedEjectaShards';
+  shards.userData.instanceRole='compact-supernova-ejecta-shards';
+  const dummy=new THREE.Object3D();
+  for(let i=0;i<QUALITY.blastShards;i++){
+    const polar=rnd()*2-1;
+    const azimuth=rnd()*Math.PI*2;
+    const radial=Math.sqrt(Math.max(0,1-polar*polar));
+    const radius=7+Math.pow(rnd(),.74)*9;
+    dummy.position.set(Math.cos(azimuth)*radial*radius,polar*radius,
+      Math.sin(azimuth)*radial*radius);
+    dummy.rotation.set(rnd()*Math.PI,rnd()*Math.PI,rnd()*Math.PI);
+    const scale=.22+rnd()*.76;
+    dummy.scale.set(scale*(.55+rnd()),scale*(.62+rnd()*.72),
+      scale*(.55+rnd()*.88));
+    dummy.updateMatrix();
+    shards.setMatrixAt(i,dummy.matrix);
   }
+  shards.instanceMatrix.needsUpdate=true;
+  shards.renderOrder=11;
+  root.add(shards);
+
+  const coreMaterial=scope.own(new THREE.MeshPhysicalMaterial({
+    name:'Crab.SN1054FlashCoreMaterial',
+    color:0xffffff,
+    emissive:0xffb25a,
+    emissiveIntensity:5,
+    roughness:.2,
+    transparent:true,
+    opacity:0,
+    depthWrite:false,
+    toneMapped:false,
+  }));
+  const core=new THREE.Mesh(scope.own(new THREE.IcosahedronGeometry(2.1,3)),
+    coreMaterial);
+  core.name='Crab.SN1054CompactFlashCore';
+  core.renderOrder=12;
+  root.add(core);
+  return {root,shell,shellMaterial,shards,shardMaterial,core,coreMaterial};
 }
 
-function disposeDetachedObject(root){
-  if (!root) return;
-  const geometries = new Set(), materials = new Set();
-  root.traverse(object => {
-    if (object.geometry && !geometries.has(object.geometry)){
-      geometries.add(object.geometry);
-      object.geometry.dispose();
-    }
-    const list = Array.isArray(object.material) ? object.material :
-      (object.material ? [object.material] : []);
-    for (const material of list){
-      if (materials.has(material)) continue;
-      materials.add(material);
-      disposeMaterial(material);
-    }
+function makeArchivePanel(scope,{name,file,width,aspect,accent}){
+  const group=new THREE.Group();
+  group.name=name;
+  group.userData.flatScientificSource=true;
+  group.userData.sourceFile=file;
+  const height=width/aspect;
+  const backingMaterial=scope.own(new THREE.MeshBasicMaterial({
+    name:`${name}.BackingMaterial`,
+    color:0x020609,
+    transparent:true,
+    opacity:0,
+    depthWrite:false,
+    depthTest:false,
+    side:THREE.DoubleSide,
+  }));
+  const backing=new THREE.Mesh(scope.own(new THREE.PlaneGeometry(width+1.3,height+1.3)),
+    backingMaterial);
+  backing.name=`${name}.Backing`;
+  backing.position.z=-.12;
+  backing.renderOrder=70;
+  group.add(backing);
+
+  const imageMaterial=scope.own(new THREE.MeshBasicMaterial({
+    name:`${name}.ImageMaterial`,
+    color:0xffffff,
+    transparent:true,
+    opacity:0,
+    depthWrite:false,
+    depthTest:false,
+    side:THREE.DoubleSide,
+    toneMapped:false,
+  }));
+  imageMaterial.userData.keepMaps=true;
+  const image=new THREE.Mesh(scope.own(new THREE.PlaneGeometry(width,height)),imageMaterial);
+  image.name=`${name}.AuthenticObservation`;
+  image.userData.flatScientificSource=true;
+  image.renderOrder=71;
+  group.add(image);
+
+  const frameMaterial=scope.own(new THREE.MeshBasicMaterial({
+    name:`${name}.FrameMaterial`,
+    color:accent,
+    transparent:true,
+    opacity:0,
+    depthWrite:false,
+    depthTest:false,
+    toneMapped:false,
+  }));
+  const horizontal=scope.own(new THREE.BoxGeometry(1,1,.08));
+  const vertical=scope.own(new THREE.BoxGeometry(1,1,.08));
+  for(const y of [-height*.5-.38,height*.5+.38]){
+    const bar=new THREE.Mesh(horizontal,frameMaterial);
+    bar.scale.set(width+1.45,.11,1);
+    bar.position.set(0,y,.06);
+    bar.renderOrder=72;
+    group.add(bar);
+  }
+  for(const x of [-width*.5-.38,width*.5+.38]){
+    const bar=new THREE.Mesh(vertical,frameMaterial);
+    bar.scale.set(.11,height+1.45,1);
+    bar.position.set(x,0,.06);
+    bar.renderOrder=72;
+    group.add(bar);
+  }
+
+  let requested=false;
+  let loaded=false;
+  function request(){
+    if(requested||scope.disposed) return;
+    requested=true;
+    loadTexture(file,scope.guard(texture=>{
+      imageMaterial.map=texture;
+      imageMaterial.needsUpdate=true;
+      loaded=true;
+      group.userData.sourceLoaded=true;
+    }));
+  }
+  function setOpacity(alpha){
+    const visible=alpha>.003;
+    group.visible=visible;
+    if(visible) request();
+    backingMaterial.opacity=.88*alpha;
+    imageMaterial.opacity=(loaded?1:0)*alpha;
+    frameMaterial.opacity=.72*alpha;
+  }
+  setOpacity(0);
+  return {group,setOpacity,width,height,file};
+}
+
+function buildArchiveDock(scope,parent){
+  const root=new THREE.Group();
+  root.name='Crab.AuthenticObservationArchive';
+  root.userData.observationSidecar=true;
+  root.userData.sourceIsFlatObservation=true;
+  root.userData.modelReplacement=false;
+  parent.add(root);
+
+  const hubble=makeArchivePanel(scope,{
+    name:'Crab.Hubble2024Context',file:HUBBLE_2024,width:25,aspect:1,
+    accent:0xff9a70,
   });
+  const webb=makeArchivePanel(scope,{
+    name:'Crab.Webb2023Infrared',file:WEBB_2023,width:26,aspect:WEBB_ASPECT,
+    accent:0xb78cff,
+  });
+  const earlier=makeArchivePanel(scope,{
+    name:'Crab.Hubble1999Registered',file:HUBBLE_1999,width:14.6,aspect:1,
+    accent:0xff8870,
+  });
+  const later=makeArchivePanel(scope,{
+    name:'Crab.Hubble2024Registered',file:HUBBLE_2024,width:14.6,aspect:1,
+    accent:0x72d8ff,
+  });
+  earlier.group.position.x=-7.75;
+  later.group.position.x=7.75;
+  root.add(hubble.group,webb.group,earlier.group,later.group);
+
+  let mode='none';
+  let alpha=0;
+  const cameraQuaternion=new THREE.Quaternion();
+  const right=new THREE.Vector3();
+  const up=new THREE.Vector3();
+
+  function setMode(next){
+    mode=next||'none';
+    root.userData.activeArchiveMode=mode;
+  }
+  function dimensions(){
+    if(mode==='comparison') return {width:31,height:14.6};
+    if(mode==='webb') return {width:webb.width,height:webb.height};
+    return {width:hubble.width,height:hubble.height};
+  }
+  function update(dt,camera,targetAlpha){
+    alpha=damp(alpha,targetAlpha,7.5,dt);
+    hubble.setOpacity(mode==='hubble'?alpha:0);
+    webb.setOpacity(mode==='webb'?alpha:0);
+    earlier.setOpacity(mode==='comparison'?alpha:0);
+    later.setOpacity(mode==='comparison'?alpha:0);
+    root.visible=alpha>.003&&mode!=='none';
+    if(!root.visible||!camera) return;
+
+    const viewportAspect=Number.isFinite(camera.aspect)?camera.aspect:1.6;
+    const distance=Math.max(1,camera.position.length());
+    const halfHeight=distance*Math.tan(THREE.MathUtils.degToRad(
+      Number.isFinite(camera.fov)?camera.fov:52)*.5);
+    const halfWidth=halfHeight*viewportAspect;
+    const size=dimensions();
+    const heroRadius=36;
+    let layoutScale;
+    let x;
+    let y;
+    if(viewportAspect<1.05||halfWidth-heroRadius<18){
+      const widthScale=(halfWidth*2-4)/size.width;
+      const heightScale=(halfHeight-heroRadius-4)/size.height;
+      layoutScale=THREE.MathUtils.clamp(Math.min(.64,widthScale,heightScale),.28,.64);
+      x=0;
+      y=Math.max(0,halfHeight-2-size.height*layoutScale*.5);
+      root.userData.layoutMode='portrait-top-evidence-gutter';
+    }else{
+      layoutScale=THREE.MathUtils.clamp(
+        (halfWidth-heroRadius-5)/size.width,.38,.82);
+      x=halfWidth-2-size.width*layoutScale*.5;
+      y=Math.min(8,halfHeight*.14);
+      root.userData.layoutMode='landscape-side-evidence-gutter';
+    }
+    root.scale.setScalar(layoutScale*(.97+alpha*.03));
+    camera.getWorldQuaternion(cameraQuaternion);
+    root.quaternion.copy(cameraQuaternion);
+    right.copy(X_AXIS).applyQuaternion(cameraQuaternion);
+    up.copy(Y_AXIS).applyQuaternion(cameraQuaternion);
+    root.position.copy(right).multiplyScalar(x).addScaledVector(up,y);
+    root.userData.layoutScale=layoutScale;
+  }
+  return {root,setMode,update,get mode(){return mode;}};
 }
 
-export function buildCrabFeatured({ entry }){
-  const group = new THREE.Group();
-  group.name = 'crab-nebula-dedicated-exhibit';
-  const tier = detectTier().tier;
-  const low = tier === 'low';
-  const budget = low
-    ? { sample: 190, structureSample: 150, stars: 70, webbStars: 85,
-        hubbleGasPatches: 720, filamentSheets: 8, webbCagePatches: 620,
-        webbSynchrotronPatches: 260, patchSeparationSq: 3.2, ejecta: 900,
-        textureLongSide: 2048 }
-    : { sample: 310, structureSample: 248, stars: 170, webbStars: 210,
-        hubbleGasPatches: 1700, filamentSheets: 16, webbCagePatches: 1450,
-        webbSynchrotronPatches: 620, patchSeparationSq: 3.6, ejecta: 2400,
-        textureLongSide: 4096 };
-  const rnd = mulberry(hashStr('crab-dedicated:' + entry.id));
-  let disposed = false;
-  let modelGeneration = 0;
-  let modelStarted = false;
-  let modelRoot = null;
-  let modelMaterial = null;
-  let dracoLoader = null;
-  let time = 0;
-  let flashAge = 0;
-  let activeState = STATES.EXPANSION;
-  let previousNonWebbState = STATES.EXPANSION;
+function setSurfaceOpacity(material,value){
+  material.uniforms.uOpacity.value=Math.max(0,value);
+  material.visible=value>.002;
+}
 
-  const ownedTextures = new Set();
-  const pendingImages = new Set();
-  const hubble1999Fallback = solidTexture(0x39172a);
-  const hubble2024Fallback = solidTexture(0x18324d);
-  const webbFallback = solidTexture(0x341c4d);
-  const glowTexture = softTexture();
-  ownedTextures.add(hubble1999Fallback);
-  ownedTextures.add(hubble2024Fallback);
-  ownedTextures.add(webbFallback);
+function setSurfaceTime(material,time){
+  material.uniforms.uTime.value=time;
+}
 
-  const hubbleMaterial = makeHubbleMaterial(hubble1999Fallback, hubble2024Fallback);
-  const webbMaterial = makeWebbMaterial(webbFallback);
-  const hubblePlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(HUBBLE_WIDTH, PHOTO_HEIGHT), hubbleMaterial);
-  hubblePlane.name = 'registered-hubble-1999-2024-observation';
-  hubblePlane.renderOrder = 1;
-  group.add(hubblePlane);
-  const webbPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(WEBB_WIDTH, PHOTO_HEIGHT), webbMaterial);
-  webbPlane.name = 'webb-2023-infrared-observation';
-  webbPlane.position.z = .025;
-  webbPlane.renderOrder = 2;
-  group.add(webbPlane);
+export function buildCrabFeatured({entry}){
+  const scope=new ResourceScope('crab-model-first');
+  const group=new THREE.Group();
+  group.name='Crab.ModelFirstRemnantAndArchive';
+  const modelRoot=new THREE.Group();
+  modelRoot.name='Crab.PersistentThreeDimensionalRemnant';
+  modelRoot.userData.persistentThreeDimensionalModel=true;
+  group.add(modelRoot);
+  const rnd=mulberry(hashStr(`crab-model-first:${entry&&entry.id||'crab'}`));
 
-  const sharedUniforms = {
-    uOrbit: { value: 0 },
-    uEpoch: hubbleMaterial.uniforms.uEpoch,
-    uCompare: hubbleMaterial.uniforms.uCompare,
-    uCurtain: hubbleMaterial.uniforms.uCurtain,
-    uStarOpacity: { value: .82 },
-    uWebbStarOpacity: { value: 0 },
-    uWebbStructureOpacity: { value: 0 },
-    uHubblePatchOpacity: { value: .80 },
-    uBacktrace: { value: 0 },
-    uFilamentOpacity: { value: .74 },
-    uWebbMix: { value: 0 },
-    uTime: { value: 0 },
-  };
+  const cocoonMaterial=makeSurfaceMaterial(scope,{
+    name:'Crab.SynchrotronCocoonMaterial',inner:0x203c89,outer:0x6f9eff,
+    opacity:.44,cutout:.32,scale:.23,fresnel:1.65,
+  });
+  const cocoon=new THREE.Mesh(makeIrregularShellGeometry(scope,{
+    radius:25,
+    axes:new THREE.Vector3(1.02,.82,.73),
+    phase:1.3,
+    role:'porous-blue-synchrotron-cocoon-surface',
+  }),cocoonMaterial);
+  cocoon.name='Crab.PorousSynchrotronCocoon';
+  cocoon.renderOrder=1;
+  modelRoot.add(cocoon);
 
-  const filaments = buildFilamentSheets(
-    group, rnd, budget.filamentSheets, sharedUniforms);
-  const supernova = buildSupernova(group, rnd, budget.ejecta, glowTexture);
-  const engine = buildPulsarEngine(group, glowTexture, low);
-  const modelAnchor = new THREE.Group();
-  modelAnchor.name = 'official-xray-informed-model-anchor';
-  group.add(modelAnchor);
+  const ejectaMaterial=makeSurfaceMaterial(scope,{
+    name:'Crab.FragmentedEjectaSurfaceMaterial',inner:0x5d6fa8,outer:0xe05436,
+    opacity:.38,cutout:.42,scale:.30,fresnel:1.45,
+  });
+  const ejecta=new THREE.Mesh(makeIrregularShellGeometry(scope,{
+    radius:32.5,
+    axes:new THREE.Vector3(1.02,.88,.74),
+    phase:3.7,
+    role:'fragmented-mixed-ejecta-surface',
+  }),ejectaMaterial);
+  ejecta.name='Crab.FragmentedEjectaSurface';
+  ejecta.renderOrder=2;
+  modelRoot.add(ejecta);
 
-  let hubble1999Image = null;
-  let hubble2024Image = null;
-  let hubbleLayersBuilt = false;
-  let webbStarsBuilt = false;
-  let hubbleRegistered = null;
-  let hubblePatchMesh = null;
-  let webbStarLayer = null;
-  let webbStructure = null;
+  const filamentMaterial=makeFilamentMaterial(scope);
+  const filamentCage=new THREE.Mesh(makeFilamentCageGeometry(scope,rnd),
+    filamentMaterial);
+  filamentCage.name='Crab.FilamentCageIndexedSurface';
+  filamentCage.renderOrder=5;
+  modelRoot.add(filamentCage);
+  const knots=addFilamentKnots(scope,modelRoot,rnd);
+  const engine=buildPulsarEngine(scope,modelRoot);
+  const blast=buildHistoricalBlast(scope,modelRoot,rnd);
+  const archive=buildArchiveDock(scope,group);
 
-  const current = { ...PRESETS[activeState] };
-  let target = { ...current };
+  let activeState=STATES.PULSAR;
+  let previousNonWebbState=STATES.PULSAR;
+  let target={...PRESETS[activeState]};
+  const current={...target};
+  let elapsed=0;
 
-  group.userData.renderer = 'crab-observation-sculpt-v2';
-  group.userData.activeState = activeState;
-  group.userData.qualityTier = tier;
-  group.userData.qualityBudget = { ...budget };
-  group.userData.filamentSheets = budget.filamentSheets;
-  group.userData.modelStatus = 'idle';
-  group.userData.assets = {
-    hubble1999: HUBBLE_1999,
-    hubble2024: HUBBLE_2024,
-    webb2023: WEBB_2023,
-    xrayModel: XRAY_MODEL,
-  };
-  group.userData.scientificSemantics = {
-    [STATES.SUPERNOVA]: 'Illustrative reconstruction; no telescope image of the 1054 event.',
-    [STATES.DISCOVERY]: 'Later Hubble data used as an illustrative optical view, not a 1731 image.',
-    [STATES.BACKTRACE]: 'Radial back-trace is an inference display, not recovered 1928 imagery.',
-    [STATES.PULSAR]: 'NASA X-ray-informed 3D representation; not tomography or astrometric geometry.',
-    [STATES.WEBB]: 'Infrared wavelength comparison; never interpolated as a time epoch.',
-    [STATES.EXPANSION]: 'Registered matched-color 1999/2024 comparison; WFPC2 and WFC3 differ.',
-  };
-  group.userData.registration = {
-    hubble: {
-      temporal: true,
-      dimensions: [HUBBLE_SIZE, HUBBLE_SIZE],
-      method: 'Official matched presentation coordinates; stable stars share normalized pixels.',
-      caveat: 'Different instruments: 1999 WFPC2 and 2024 WFC3.',
+  Object.assign(group.userData,{
+    renderer:'crab-model-first-sculpt-v3',
+    activeState,
+    modelFirst:true,
+    modelAlwaysVisible:true,
+    persistentThreeDimensionalModel:true,
+    genericImageVolume:false,
+    observationRequested:false,
+    observationAssets:{
+      hubble1999:HUBBLE_1999,
+      hubble2024:HUBBLE_2024,
+      webb2023:WEBB_2023,
     },
-    webb: {
-      temporal: false,
-      dimensions: [4000, 3483],
-      method: 'Independent native-aspect observation plane with independently aligned stars.',
-      caveat: 'Different wavelength bands and crop; not morphed into Hubble epochs.',
+    supportedStates:Object.values(STATES),
+    qualityTier:TEX_TIER,
+    qualityBudget:{...QUALITY},
+    primitivePolicy:
+      'Indexed shell, ribbon, toroidal-flow and jet surfaces plus instanced faceted knots; no point clouds, sprites, wireframes, generic fuzzy volumes or image-extruded surfels.',
+    scientificStructure:{
+      filaments:
+        'Broad indexed ribbons and faceted knots reconstruct the optical filament cage statistically. Their depth and branching are model-led, not tomography.',
+      synchrotron:
+        'A porous asymmetric inner surface communicates the pulsar-powered synchrotron volume without turning it into a smooth transparent sphere.',
+      engine:
+        'True cross-section termination-shock tubes, partial moving-wisp surfaces and opposed indexed jet surfaces explain the pulsar wind at strongly compressed scale.',
+      observations:
+        'Hubble and Webb products stay flat in a camera-relative archive sidecar. Hubble 1999/2024 share the official matched presentation; Webb is a separate wavelength and crop.',
+      supernova:
+        'The 1054 state is a compact ragged indexed shock and faceted ejecta reconstruction, not an observed image or a present-day shell run backward.',
     },
-    model: 'Centered and scaled for explanation only; not coordinate-aligned to either image.',
-  };
-  group.userData.pulsarAnimation =
-    'Visual motion is deliberately slow; the physical ~30 Hz pulse is not flashed onscreen.';
-  group.userData.morphology = {
-    optical: 'Registered Hubble features unfold as separated torn patches on a corrugated ellipsoidal shell.',
-    infrared: 'Webb-derived dust/sulfur and synchrotron patches retain exact photo coordinates head-on.',
-    waist: 'Eight or sixteen broad filament sheets bend through the equatorial pinch without forming a wire cage.',
-    pulsar: 'Nested partial wisps, ringed equatorial flow and opposed jets follow the NASA X-ray context model.',
-    atmosphere: 'No generic soft cloud sprites; all persistent structure is image-derived or morphology-bound.',
-  };
-
-  function noteAssetError(asset, error){
-    const errors = group.userData.assetErrors || (group.userData.assetErrors = {});
-    errors[asset] = error && error.message ? error.message : 'load failed';
-  }
-
-  function loadImageTexture(url, onLoad){
-    const image = new Image();
-    let settled = false;
-    const cancel = () => {
-      if (settled) return;
-      settled = true;
-      pendingImages.delete(cancel);
-      image.onload = null;
-      image.onerror = null;
-      image.src = '';
-    };
-    pendingImages.add(cancel);
-    image.decoding = 'async';
-    image.crossOrigin = 'anonymous';
-    image.onload = () => {
-      if (settled) return;
-      settled = true;
-      pendingImages.delete(cancel);
-      image.onload = null;
-      image.onerror = null;
-      if (disposed) return;
-      const texture = new THREE.Texture(textureSource(image, budget.textureLongSide));
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = low ? 4 : 8;
-      texture.minFilter = THREE.LinearMipmapLinearFilter;
-      texture.needsUpdate = true;
-      ownedTextures.add(texture);
-      try{ onLoad(texture, image); }
-      catch (error){ noteAssetError(url, error); }
-    };
-    image.onerror = () => {
-      if (settled) return;
-      settled = true;
-      pendingImages.delete(cancel);
-      image.onload = null;
-      image.onerror = null;
-      if (!disposed) noteAssetError(url, new Error('image load failed'));
-    };
-    image.src = url;
-    return cancel;
-  }
-
-  function buildHubbleLayers(){
-    if (disposed || hubbleLayersBuilt || !hubble1999Image || !hubble2024Image) return;
-    hubbleLayersBuilt = true;
-    const image1999 = hubble1999Image;
-    const image2024 = hubble2024Image;
-    group.userData.hubblePairDimensionsVerified =
-      image1999.naturalWidth === HUBBLE_SIZE && image1999.naturalHeight === HUBBLE_SIZE &&
-      image2024.naturalWidth === HUBBLE_SIZE && image2024.naturalHeight === HUBBLE_SIZE;
-    try{
-      const registered = buildRegisteredStars(group, image1999, image2024,
-        budget, sharedUniforms, 'crab-registered-stars:' + entry.id);
-      const patches = buildHubblePatches(group, image1999, image2024,
-        budget, sharedUniforms, 'crab-hubble-patches:' + entry.id);
-      hubbleRegistered = registered && registered.stars;
-      hubblePatchMesh = patches && patches.mesh;
-      group.userData.registeredHubbleStars = registered ? registered.count : 0;
-      group.userData.hubbleGasPatches = patches ? patches.patchCount : 0;
-      group.userData.hubbleRegistrationReady = true;
-    }catch (error){
-      group.userData.hubbleRegistrationReady = false;
-      noteAssetError('hubble-derived-layers', error);
-    }
-    // Low-tier GPU textures use 2K canvas derivatives, so release the decoded
-    // 4K HTML images after color sampling and registration data are built.
-    hubble1999Image = null;
-    hubble2024Image = null;
-  }
-
-  loadImageTexture(HUBBLE_1999, (texture, image) => {
-    hubbleMaterial.uniforms.u1999.value = texture;
-    hubbleMaterial.uniforms.uReady1999.value = 1;
-    hubble1999Image = image;
-    buildHubbleLayers();
-  });
-  loadImageTexture(HUBBLE_2024, (texture, image) => {
-    hubbleMaterial.uniforms.u2024.value = texture;
-    hubbleMaterial.uniforms.uReady2024.value = 1;
-    hubble2024Image = image;
-    buildHubbleLayers();
-  });
-  loadImageTexture(WEBB_2023, (texture, image) => {
-    webbMaterial.uniforms.uMap.value = texture;
-    webbMaterial.uniforms.uReady.value = 1;
-    group.userData.webbDimensionsVerified =
-      image.naturalWidth === 4000 && image.naturalHeight === 3483;
-    if (!webbStarsBuilt){
-      webbStarsBuilt = true;
-      try{
-        const stars = buildWebbStars(group, image, budget, sharedUniforms,
-          'crab-webb-stars:' + entry.id);
-        webbStarLayer = stars && stars.stars;
-        webbStructure = buildWebbStructure(group, image, budget, sharedUniforms,
-          'crab-webb-structure:' + entry.id);
-        group.userData.alignedWebbStars = stars ? stars.count : 0;
-        group.userData.webbCagePatches = webbStructure.cagePatchCount;
-        group.userData.webbSynchrotronPatches =
-          webbStructure.synchrotronPatchCount;
-        group.userData.webbAlignmentReady = true;
-      }catch (error){
-        group.userData.webbAlignmentReady = false;
-        noteAssetError('webb-derived-stars', error);
-      }
-    }
+    scientificCaveat:
+      'Filament depth, ejecta placement, color, simultaneous visibility and pulsar-wind scale are explanatory. Only the archive panels are telescope observations.',
   });
 
-  function ensureModel(){
-    if (disposed || modelStarted) return;
-    modelStarted = true;
-    const generation = ++modelGeneration;
-    group.userData.modelStatus = 'loading';
-    Promise.all([
-      import('three/addons/loaders/GLTFLoader.js'),
-      import('three/addons/loaders/DRACOLoader.js'),
-    ]).then(([{ GLTFLoader }, { DRACOLoader }]) => {
-      if (disposed || generation !== modelGeneration) return;
-      dracoLoader = new DRACOLoader();
-      dracoLoader.setDecoderPath(DRACO_DECODER);
-      dracoLoader.preload();
-      const loader = new GLTFLoader();
-      loader.setDRACOLoader(dracoLoader);
-      loader.load(XRAY_MODEL, gltf => {
-        if (disposed || generation !== modelGeneration){
-          disposeDetachedObject(gltf.scene);
-          return;
-        }
-        modelRoot = gltf.scene;
-        const originalMaterials = new Set();
-        modelRoot.traverse(object => {
-          if (!object.isMesh) return;
-          const list = Array.isArray(object.material) ? object.material : [object.material];
-          for (const material of list) if (material) originalMaterials.add(material);
-        });
-        for (const material of originalMaterials) disposeMaterial(material);
-        modelMaterial = new THREE.MeshStandardMaterial({
-          color: 0x405dd8,
-          emissive: 0x162d9a,
-          emissiveIntensity: 1.45,
-          roughness: .68,
-          metalness: .08,
-          transparent: true,
-          opacity: 0,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-        });
-        modelRoot.traverse(object => {
-          if (!object.isMesh) return;
-          object.material = modelMaterial;
-          object.renderOrder = 6;
-        });
-        let box = new THREE.Box3().setFromObject(modelRoot);
-        const size = box.getSize(new THREE.Vector3());
-        const scale = 56/Math.max(size.x, size.y, size.z, .001);
-        modelRoot.scale.setScalar(scale);
-        box = new THREE.Box3().setFromObject(modelRoot);
-        const center = box.getCenter(new THREE.Vector3());
-        modelRoot.position.set(-center.x, -center.y, -center.z);
-        modelRoot.userData.scientificRole =
-          'NASA X-ray-informed representation; centered/scaled, not tomography or image registration.';
-        modelAnchor.add(modelRoot);
-        group.userData.modelStatus = 'ready';
-        if (dracoLoader){ dracoLoader.dispose(); dracoLoader = null; }
-      }, undefined, error => {
-        if (disposed || generation !== modelGeneration) return;
-        group.userData.modelStatus = 'error';
-        noteAssetError(XRAY_MODEL, error);
-        if (dracoLoader){ dracoLoader.dispose(); dracoLoader = null; }
-      });
-    }).catch(error => {
-      if (disposed || generation !== modelGeneration) return;
-      group.userData.modelStatus = 'error';
-      noteAssetError(XRAY_MODEL, error);
-    });
+  function applyState(next){
+    if(!PRESETS[next]) next=STATES.PULSAR;
+    if(next!==STATES.WEBB) previousNonWebbState=next;
+    activeState=next;
+    target={...PRESETS[next]};
+    archive.setMode(target.archiveMode);
+    group.userData.activeState=next;
+    group.userData.observationRequested=target.archiveMode!=='none';
+    group.userData.activePresentation=target.archiveMode==='none'
+      ? 'persistent-scientific-model'
+      : 'model-plus-source-observation';
   }
-
-  function applyState(nextState){
-    if (!PRESETS[nextState]) nextState = STATES.EXPANSION;
-    if (nextState !== STATES.WEBB) previousNonWebbState = nextState;
-    if (nextState === STATES.PULSAR) ensureModel();
-    if (nextState === STATES.SUPERNOVA && activeState !== STATES.SUPERNOVA)
-      flashAge = 0;
-    activeState = nextState;
-    target = { ...PRESETS[nextState] };
-    group.userData.activeState = nextState;
-    group.userData.activeComparison = nextState === STATES.WEBB
-      ? 'wavelength'
-      : nextState === STATES.EXPANSION ? 'registered-time-pair' : 'illustrative-context';
-  }
+  applyState(activeState);
 
   return {
     group,
-    focusDist: 105,
-    startTheta: 0,
-    startPhi: Math.PI/2,
-    autoRotate: false,
-    hasIR: true,
-    isImage: true,
-    imageCredit: IMAGE_CREDIT,
-    modelCredit: MODEL_CREDIT,
+    focusDist:108,
+    startTheta:.34,
+    startPhi:1.22,
+    autoRotate:false,
+    hasIR:true,
+    isImage:false,
+    imageCredit:IMAGE_CREDIT,
+    modelCredit:MODEL_CREDIT,
     setMoment(visual){
-      if (!disposed) applyState(stateFromVisual(visual));
+      if(!scope.disposed) applyState(stateFromVisual(visual));
     },
     setIR(on){
-      if (disposed) return;
-      applyState(on ? STATES.WEBB : previousNonWebbState);
+      if(scope.disposed) return;
+      applyState(on?STATES.WEBB:previousNonWebbState);
     },
-    update(dt, camera){
-      if (disposed) return;
-      dt = Math.min(Math.max(dt || 0, 0), .05);
-      time += dt;
-      if (activeState === STATES.SUPERNOVA) flashAge += dt;
-      for (const key of Object.keys(current))
-        current[key] = damp(current[key], target[key], 3.6, dt);
+    update(dt,camera){
+      if(scope.disposed) return;
+      dt=clampStep(dt);
+      elapsed+=dt;
+      for(const key of ['filaments','cocoon','ejecta','knots','engine','blast','warm','archive'])
+        current[key]=damp(current[key],target[key],3.9,dt);
 
-      let front = 1;
-      if (camera){
-        const length = Math.max(camera.position.length(), .001);
-        front = camera.position.z/length;
+      filamentMaterial.uniforms.uOpacity.value=.96*current.filaments;
+      filamentMaterial.uniforms.uTime.value=elapsed;
+      filamentMaterial.uniforms.uWarm.value=current.warm;
+      filamentCage.visible=current.filaments>.002;
+
+      setSurfaceOpacity(cocoonMaterial,.44*current.cocoon);
+      setSurfaceOpacity(ejectaMaterial,.38*current.ejecta);
+      cocoonMaterial.uniforms.uWarm.value=current.warm*.22;
+      ejectaMaterial.uniforms.uWarm.value=current.warm*.58;
+      setSurfaceTime(cocoonMaterial,elapsed);
+      setSurfaceTime(ejectaMaterial,elapsed);
+
+      knots.material.opacity=Math.min(1,.86*current.knots);
+      knots.material.emissiveIntensity=1.35+current.warm*.85;
+      knots.mesh.visible=current.knots>.002;
+
+      engine.root.visible=current.engine>.002;
+      for(const material of engine.materials){
+        material.uniforms.uOpacity.value=material.userData.baseOpacity*current.engine;
+        material.uniforms.uTime.value=elapsed;
       }
-      const headOn = THREE.MathUtils.smoothstep(front, .9511, .9990);
-      const orbitTarget = 1-headOn;
-      sharedUniforms.uOrbit.value = damp(sharedUniforms.uOrbit.value, orbitTarget, 4.5, dt);
-      const frontHemisphere = THREE.MathUtils.smoothstep(front, -.15, .32);
-      const observationVisibility = headOn*.97+frontHemisphere*.03;
-      const curtain = .5+Math.sin(time*.20)*.24;
+      engine.inner.rotation.z=elapsed*.018;
+      engine.outer.rotation.z=-elapsed*.011;
+      for(let i=0;i<engine.wisps.length;i++)
+        engine.wisps[i].rotation.z+=dt*(i%2?-.010:.013);
+      engine.coreMaterial.emissiveIntensity=(3.4+current.engine*.95)*
+        (.96+.04*Math.sin(elapsed*.92));
+      engine.core.scale.setScalar(.92+current.engine*.08+
+        Math.sin(elapsed*.78)*.025);
 
-      sharedUniforms.uEpoch.value = current.epoch;
-      sharedUniforms.uCompare.value = current.compare;
-      sharedUniforms.uCurtain.value = curtain;
-      sharedUniforms.uStarOpacity.value = current.stars;
-      sharedUniforms.uWebbStarOpacity.value = current.webbStars;
-      sharedUniforms.uWebbStructureOpacity.value = current.webb;
-      sharedUniforms.uHubblePatchOpacity.value = current.gasPatches;
-      sharedUniforms.uBacktrace.value = current.backtrace;
-      sharedUniforms.uFilamentOpacity.value = current.filaments;
-      sharedUniforms.uWebbMix.value = current.webb;
-      sharedUniforms.uTime.value = time;
+      blast.root.visible=current.blast>.002;
+      setSurfaceOpacity(blast.shellMaterial,.94*current.blast);
+      setSurfaceTime(blast.shellMaterial,elapsed);
+      blast.shardMaterial.opacity=.88*current.blast;
+      blast.coreMaterial.opacity=current.blast;
+      blast.coreMaterial.emissiveIntensity=4.4*current.blast*
+        (.96+.04*Math.sin(elapsed*.72));
+      blast.root.scale.setScalar(.76+Math.sin(elapsed*.18)*.012);
+      blast.root.rotation.y=elapsed*.010;
+      blast.root.rotation.x=Math.sin(elapsed*.06)*.025;
 
-      hubbleMaterial.uniforms.uOpacity.value = current.hubble*observationVisibility;
-      hubbleMaterial.uniforms.uSaturation.value = current.saturation;
-      hubbleMaterial.uniforms.uExposure.value = current.exposure;
-      webbMaterial.uniforms.uOpacity.value = current.webb*observationVisibility;
-      webbMaterial.uniforms.uSaturation.value = current.saturation;
-      webbMaterial.uniforms.uExposure.value = current.exposure;
-
-      const flashPhase = (flashAge%7)/7;
-      const flashRadius = 8+flashPhase*33;
-      supernova.shell.scale.setScalar(flashRadius);
-      supernova.shock.scale.setScalar(flashRadius*1.08);
-      supernova.material.opacity = current.flash*(1-flashPhase)*.86;
-      supernova.shockMaterial.uniforms.uOpacity.value = current.flash*(1-flashPhase)*.52;
-      const slowPulse = .92+Math.sin(time*1.05)*.08;
-      supernova.flash.scale.setScalar((13+flashPhase*12)*slowPulse);
-      supernova.flashMaterial.opacity = current.flash*(.74-flashPhase*.34);
-
-      engine.group.visible = current.engine > .004;
-      for (const material of engine.materials)
-        material.opacity = material.userData.baseOpacity*current.engine;
-      engine.torus.rotation.z = time*.10;
-      engine.outer.rotation.z = -time*.055;
-      for (let i = 0; i < engine.wisps.length; i++)
-        engine.wisps[i].rotation.z += dt*(i%2 ? -.018 : .022);
-      engine.core.scale.setScalar(1+Math.sin(time*1.12)*.07);
-      engine.glow.scale.setScalar(9*(1+Math.sin(time*.78)*.055));
-
-      if (modelMaterial) modelMaterial.opacity = current.model*.62;
-      modelAnchor.visible = current.model > .004;
-      modelAnchor.rotation.y = Math.sin(time*.075)*.08;
-      group.userData.hubbleCurtain = curtain;
-      group.userData.headOnAlignment = sharedUniforms.uOrbit.value < .025;
-      group.userData.modelVisible = !!modelRoot && modelAnchor.visible;
-      // A small set of broad torn surfaces replaces paired neon line rails.
-      filaments.mesh.visible = current.filaments*sharedUniforms.uOrbit.value > .003;
-      if (hubbleRegistered)
-        hubbleRegistered.visible = current.stars*sharedUniforms.uOrbit.value > .003;
-      if (hubblePatchMesh)
-        hubblePatchMesh.visible =
-          current.gasPatches*sharedUniforms.uOrbit.value > .003;
-      if (webbStarLayer)
-        webbStarLayer.visible = current.webbStars*sharedUniforms.uOrbit.value > .003;
-      if (webbStructure){
-        const visible = current.webb*sharedUniforms.uOrbit.value > .004;
-        webbStructure.cageMesh.visible = visible;
-        webbStructure.synchrotronMesh.visible = visible;
-      }
+      modelRoot.visible=true;
+      filamentCage.rotation.y+=dt*.0015;
+      cocoon.rotation.y-=dt*.0010;
+      archive.update(dt,camera,current.archive);
+      group.userData.modelVisible=true;
+      group.userData.observationRequested=
+        current.archive>.02&&archive.mode!=='none';
     },
     dispose(){
-      if (disposed) return;
-      disposed = true;
-      modelGeneration += 1;
-      group.userData.modelStatus = modelRoot ? 'disposed' : 'cancelled';
-      for (const cancel of [...pendingImages]) cancel();
-      pendingImages.clear();
-      if (dracoLoader){ dracoLoader.dispose(); dracoLoader = null; }
-      if (modelRoot){
-        modelAnchor.remove(modelRoot);
-        disposeDetachedObject(modelRoot);
-        modelRoot = null;
-        modelMaterial = null;
-      }
-      // Shader-uniform textures are invisible to LandmarkView's material.map
-      // traversal, so the exhibit owns and releases them explicitly.
-      for (const texture of ownedTextures) texture.dispose();
-      ownedTextures.clear();
+      if(scope.disposed) return;
+      scope.dispose();
+      group.removeFromParent();
+      group.clear();
+      group.userData.disposed=true;
     },
   };
 }

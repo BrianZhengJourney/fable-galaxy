@@ -33,18 +33,25 @@
   <button id="audioBtn" type="button" title="Toggle ambient sound">SOUND OFF</button>
   <button id="mapBtn" type="button" title="Return to the galaxy">MAP</button>
   <button id="tourBtn" type="button" title="Open guided tours">TOURS</button>
-  <button id="landmarkBtn" type="button" title="Explore field stories">EXPLORE</button>
+  <button id="landmarkBtn" type="button" title="Explore field stories"
+    aria-haspopup="dialog" aria-controls="landmarks" aria-expanded="false">EXPLORE</button>
   <div id="tourMenu"></div>
 </nav>
 
-<!-- cosmic landmarks catalog -->
-<div id="landmarks">
+<!-- curated cosmic landmarks catalog -->
+<div id="landmarks" role="dialog" aria-modal="true" aria-labelledby="lmTitle"
+  aria-describedby="lmIntro" inert aria-hidden="true">
   <div class="lm-head">
-    <div><span class="lm-title">EXPLORE</span><span id="lmCount"></span></div>
+    <div class="lm-heading">
+      <span class="lm-kicker">47 · INTERACTIVE FIELD ATLAS</span>
+      <h2 class="lm-title" id="lmTitle">EXPLORE</h2>
+      <p id="lmIntro">A curated collection of the atlas’s highest-fidelity cosmic environments.</p>
+      <span id="lmCount"></span>
+    </div>
     <button id="lmClose" type="button" aria-label="Close explore menu">&times;</button>
   </div>
+  <nav id="lmSectionNav" aria-label="Explore categories"></nav>
   <div id="lmList"></div>
-  <button id="lmArchiveToggle" type="button"></button>
 </div>
 
 <!-- landmark story card -->

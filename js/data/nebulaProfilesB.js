@@ -5,7 +5,7 @@
 export const NEBULA_PROFILES_B = {
   'cats-eye-nebula': {
     family: 'nested-shell',
-    camera: { focusDist: 82, startTheta: 0, startPhi: 1.5708 },
+    camera: { focusDist: 82, startTheta: 0.57, startPhi: 1.38 },
     reconstruction: {
       headOnMode: 'exact-source-photo',
       orbitMode: 'source-registered-depth-relief',
@@ -164,17 +164,19 @@ export const NEBULA_PROFILES_B = {
       },
     },
     source: 'https://doi.org/10.1093/mnras/stac2375',
+    observationSource: 'https://science.nasa.gov/asset/hubble/the-cats-eye-nebula/',
+    observationDate: 'SEPTEMBER 18 · 1994 · HUBBLE',
     references: [
       'https://science.nasa.gov/missions/hubble/the-cats-eye-nebula/',
       'https://science.nasa.gov/asset/hubble/the-cats-eye-nebula/',
       'https://arxiv.org/abs/2209.01313',
     ],
-    caveat: 'The point-symmetric partial rings and precessing-jet interpretation follow morphokinematic constraints, and the eleven pulse shells represent observed limb-brightened bubbles. Bubble thickness, shell spacing in display units, knot placement, and unresolved line-of-sight overlap remain interpretive rather than tomography.',
+    caveat: 'The point-symmetric partial rings and precessing-jet interpretation follow morphokinematic constraints. Eleven limb-brightened outer shells are observed, but treating them as discrete mass-loss pulses is one hypothesis; waves in a smoother outflow remain viable. Bubble thickness, display-space shell spacing, knot placement, and unresolved line-of-sight overlap remain interpretive rather than tomography.',
   },
 
   'veil-nebula': {
     family: 'shock-sheet',
-    camera: { focusDist: 96, startTheta: 0, startPhi: 1.5708 },
+    camera: { focusDist: 96, startTheta: 0.51, startPhi: 1.44 },
     reconstruction: {
       headOnMode: 'exact-source-photo',
       orbitMode: 'source-registered-corrugated-sheet',
@@ -306,6 +308,8 @@ export const NEBULA_PROFILES_B = {
       ],
     },
     source: 'https://doi.org/10.1093/mnras/sty2370',
+    observationSource: 'https://esahubble.org/images/heic1520a/',
+    observationDate: '1997 + 2015 · HUBBLE OVERLAY',
     references: [
       'https://science.nasa.gov/asset/hubble/cygnus-loop/',
       'https://science.nasa.gov/asset/hubble/the-cygnus-loop-nebula-shockwave-from-a-stellar-explosion/',
@@ -316,7 +320,7 @@ export const NEBULA_PROFILES_B = {
 
   'rosette-nebula': {
     family: 'wind-bubble',
-    camera: { focusDist: 108, startTheta: 0, startPhi: 1.5708 },
+    camera: { focusDist: 108, startTheta: 0.47, startPhi: 1.46 },
     reconstruction: {
       headOnMode: 'exact-source-photo',
       orbitMode: 'source-registered-open-sheet',
@@ -444,6 +448,8 @@ export const NEBULA_PROFILES_B = {
       },
     },
     source: 'https://doi.org/10.1093/mnras/staf1530',
+    observationSource: 'https://esahubble.org/images/opo0118c/',
+    observationDate: 'DSS-II PLATES · RELEASED 2001',
     references: [
       'https://www.eso.org/public/images/b12/',
       'https://science.nasa.gov/photojournal/wise-captures-the-unicorns-rose/',
@@ -454,7 +460,7 @@ export const NEBULA_PROFILES_B = {
 
   'trifid-nebula': {
     family: 'trilobe',
-    camera: { focusDist: 94, startTheta: 0, startPhi: 1.5708 },
+    camera: { focusDist: 94, startTheta: 0.49, startPhi: 1.42 },
     reconstruction: {
       headOnMode: 'exact-source-photo',
       orbitMode: 'source-registered-layered-occlusion',
@@ -612,6 +618,8 @@ export const NEBULA_PROFILES_B = {
       },
     },
     source: 'https://doi.org/10.3847/1538-4357/ad19cb',
+    observationSource: 'https://www.eso.org/public/images/eso0930b/',
+    observationDate: 'ESO WFI COMPOSITE · RELEASED 2009',
     references: [
       'https://science.nasa.gov/photojournal/trifid-nebula/',
       'https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-20/',

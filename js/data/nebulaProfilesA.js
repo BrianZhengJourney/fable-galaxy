@@ -10,7 +10,7 @@
 export const NEBULA_PROFILES_A = {
   'orion-nebula': {
     family: 'open-bowl',
-    camera: { focusDist: 91, startTheta: 0, startPhi: 1.5708 },
+    camera: { focusDist: 91, startTheta: 0.46, startPhi: 1.46 },
     volume: {
       depth: 31,
       density: 0.88,
@@ -126,6 +126,8 @@ export const NEBULA_PROFILES_A = {
       ],
     },
     source: 'https://science.nasa.gov/missions/hubble/nasa-space-telescopes-provide-a-3d-journey-through-the-orion-nebula/',
+    observationSource: 'https://science.nasa.gov/asset/hubble/close-up-images-of-the-orion-nebula/',
+    observationDate: '2001 + 2004–2005 · HUBBLE/ESO MOSAIC',
     references: [
       'https://science.nasa.gov/missions/hubble/nasa-space-telescopes-provide-a-3d-journey-through-the-orion-nebula/',
       'https://science.nasa.gov/asset/hubble/hubbles-sharpest-view-of-the-orion-nebula/',
@@ -136,7 +138,7 @@ export const NEBULA_PROFILES_A = {
 
   'horsehead-nebula': {
     family: 'edge-ridge',
-    camera: { focusDist: 93, startTheta: 0, startPhi: 1.5708 },
+    camera: { focusDist: 93, startTheta: 0.5, startPhi: 1.49 },
     volume: {
       depth: 27,
       density: 1.08,
@@ -256,6 +258,8 @@ export const NEBULA_PROFILES_A = {
       ],
     },
     source: 'https://science.nasa.gov/missions/webb/webb-captures-top-of-iconic-horsehead-nebula-in-unprecedented-detail/',
+    observationSource: 'https://commons.wikimedia.org/wiki/File:Barnard_33.jpg',
+    observationDate: 'JANUARY 21 · 2011 · GROUND-BASED COMPOSITE',
     references: [
       'https://science.nasa.gov/missions/webb/webb-captures-top-of-iconic-horsehead-nebula-in-unprecedented-detail/',
       'https://www.esa.int/Science_Exploration/Space_Science/Webb/Webb_captures_iconic_Horsehead_Nebula_in_unprecedented_detail',
@@ -266,7 +270,7 @@ export const NEBULA_PROFILES_A = {
 
   'ring-nebula': {
     family: 'planetary-ring',
-    camera: { focusDist: 84, startTheta: 0, startPhi: 1.5708 },
+    camera: { focusDist: 84, startTheta: 0.56, startPhi: 1.39 },
     volume: {
       depth: 38,
       density: 0.86,
@@ -384,6 +388,8 @@ export const NEBULA_PROFILES_A = {
       ],
     },
     source: 'https://science.nasa.gov/missions/hubble/nasas-hubble-space-telescope-reveals-the-ring-nebulas-true-shape/',
+    observationSource: 'https://science.nasa.gov/missions/hubble/looking-down-a-barrel-of-gas-at-a-doomed-star/',
+    observationDate: 'OCTOBER 16 · 1998 · HUBBLE',
     references: [
       'https://science.nasa.gov/missions/hubble/nasas-hubble-space-telescope-reveals-the-ring-nebulas-true-shape/',
       'https://science.nasa.gov/asset/hubble/hubble-reveals-the-ring-nebulas-true-shape/',
@@ -394,7 +400,7 @@ export const NEBULA_PROFILES_A = {
 
   'helix-nebula': {
     family: 'double-ring',
-    camera: { focusDist: 89, startTheta: 0, startPhi: 1.5708 },
+    camera: { focusDist: 89, startTheta: 0.52, startPhi: 1.43 },
     volume: {
       depth: 42,
       density: 0.8,
@@ -518,6 +524,8 @@ export const NEBULA_PROFILES_A = {
       ],
     },
     source: 'https://arxiv.org/abs/astro-ph/0407556',
+    observationSource: 'https://science.nasa.gov/asset/hubble/the-helix-nebula-a-gaseous-envelope-expelled-by-a-dying-star/',
+    observationDate: 'NOV 2002 + SEP 2003 · HUBBLE/CTIO',
     references: [
       'https://arxiv.org/abs/astro-ph/0407556',
       'https://science.nasa.gov/image-detail/idl-tiff-file-45/',
@@ -528,7 +536,7 @@ export const NEBULA_PROFILES_A = {
 
   'lagoon-nebula': {
     family: 'star-cavity',
-    camera: { focusDist: 96, startTheta: 0, startPhi: 1.5708 },
+    camera: { focusDist: 96, startTheta: 0.45, startPhi: 1.47 },
     volume: {
       depth: 30,
       density: 0.96,
@@ -669,6 +677,8 @@ export const NEBULA_PROFILES_A = {
       ],
     },
     source: 'https://science.nasa.gov/missions/hubble/giant-twisters-in-the-lagoon-nebula/',
+    observationSource: 'https://www.eso.org/public/images/potw1016a/',
+    observationDate: 'DANISH 1.54 M COMPOSITE · RELEASED 2010',
     references: [
       'https://science.nasa.gov/missions/hubble/lagoon-nebula-visible-light-view/',
       'https://science.nasa.gov/missions/hubble/giant-twisters-in-the-lagoon-nebula/',
