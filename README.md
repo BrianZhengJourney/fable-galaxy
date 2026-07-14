@@ -42,10 +42,11 @@ The five timeline-driven field exhibits have direct preview URLs:
 - `http://127.0.0.1:8741/#/landmark/m87-black-hole-image`
 - `http://127.0.0.1:8741/#/landmark/pale-blue-dot`
 
-Nine more nebulae use dedicated photo-hybrid 3D profiles: Orion, Horsehead,
+Nine more nebulae use dedicated photo-sculpt 3D profiles: Orion, Horsehead,
 Ring, Helix, Lagoon, Cat's Eye, Veil, Rosette, and Trifid. Each starts as the
-source observation, then reveals colored, photo-aligned stars, inferred depth,
-and a science-led morphology scaffold as you orbit. Preview any one with
+source observation, then unfolds into a depth-aligned triangulated color relief
+and an object-specific morphology sculpt as you orbit. The former generic
+soft-cloud box is not part of this path. Preview any one with
 `http://127.0.0.1:8741/#/landmark/<id>`; for example:
 
 - `http://127.0.0.1:8741/#/landmark/orion-nebula`

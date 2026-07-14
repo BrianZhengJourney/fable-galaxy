@@ -543,6 +543,7 @@ class App {
     if (this.skyView){ this.skyView.dispose(); this.skyView = null; }
     if (this.surfaceView){ this.surfaceView.dispose(); this.surfaceView = null; }
     if (this.systemView){ this.systemView.dispose(); this.systemView = null; }
+    evictTextures();
     evictEpochTextures();
     this.labels.clear();
     this.galaxyView.registerLabels();

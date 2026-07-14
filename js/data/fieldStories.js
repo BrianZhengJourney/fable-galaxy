@@ -2,6 +2,8 @@
    landmark catalog: a small featured set, compact summaries and semantic
    milestones that may mix observations, evidence and model forecasts. */
 
+import { NEBULA_PROFILE_IDS } from './nebulaProfiles.js';
+
 export const FEATURED_LANDMARK_IDS = [
   'pillars-of-creation',
   'carina-nebula',
@@ -678,7 +680,11 @@ export function landmarkExperience(entry){
       kind: 'OBSERVATION',
       title: entry.famousFor || entry.subtitle || entry.name,
       text: entry.wow || 'Open More for the full field note.',
-      visual: { wavelength: 'visible', theta: 0, phi: 1.22, distance: 1 },
+      visual: {
+        wavelength: 'visible', theta: 0,
+        phi: entry && NEBULA_PROFILE_IDS.includes(entry.id) ? Math.PI/2 : 1.22,
+        distance: 1,
+      },
     }],
   };
 }

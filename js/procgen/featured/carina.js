@@ -1,14 +1,15 @@
 /* Carina is a sequence of scientifically distinct views, not one photograph
    pushed through six filters.  The Hubble mosaic, Webb's Cosmic Cliffs and the
    Eta Carinae close-up are separate fields; switching moments is therefore a
-   hard state change.  Only the Webb state turns its registered photograph into
-   an orbitable, depth-assisted surfel field. */
+   hard state change.  The Webb and concept-future states turn its registered
+   photograph into source/depth-registered triangulated reliefs. */
 
 import * as THREE from 'three';
 import { mulberry, hashStr, gaussian } from '../../utils/rng.js';
 import { loadTexture } from '../../utils/assets.js';
 import { TEX_TIER } from '../../core/quality.js';
 import { ResourceScope } from './resourceScope.js';
+import { buildPhotoRelief } from './nebulaMatter.js';
 
 const ASSETS = Object.freeze({
   webb: TEX_TIER === 'low'
@@ -32,13 +33,21 @@ export const CARINA_STATES = Object.freeze({
 const BUDGET = Object.freeze(TEX_TIER === 'low' ? {
   photoLongSide: 176,
   alignedStars: 260,
-  ambientPoints: 3600,
+  formationShellPoints: 3600,
   sphereSegments: 24,
+  reliefTriangles: 6200,
+  dustTriangles: 1700,
+  futureTriangles: 4100,
+  futureDustTriangles: 1100,
 } : {
   photoLongSide: 320,
   alignedStars: 720,
-  ambientPoints: 9200,
+  formationShellPoints: 9200,
   sphereSegments: 40,
+  reliefTriangles: 19000,
+  dustTriangles: 4800,
+  futureTriangles: 12200,
+  futureDustTriangles: 3200,
 });
 
 const PHOTO_WIDTH = 108;
@@ -46,6 +55,82 @@ const WEBB_ASPECT = 11264 / 3904;
 const HUBBLE_ASPECT = 4000 / 1937;
 const HALF_PI = Math.PI / 2;
 const MODEL_CREDIT = 'Hubble panorama: NASA, ESA, N. Smith and the Hubble Heritage Team · CC BY 4.0 · Eta UV: NASA, ESA, N. Smith and J. Morse · 3D Homunculus model: Steffen, Teodoro, Madura et al. (2014)';
+
+const WEBB_RELIEF_PROFILE = Object.freeze({
+  volume: Object.freeze({ depth: 34, depthScale: 1 }),
+  palette: Object.freeze({ dust: 0x160b18 }),
+  matter: Object.freeze({
+    cloudSuppression: .97,
+    filamentBias: .96,
+    silhouetteBias: .94,
+    edgeGain: 3.25,
+    edgeExponent: 1.16,
+    gasThreshold: .048,
+    dustThreshold: .47,
+    gasOpacity: .88,
+    dustOpacity: .96,
+    alphaCutoff: .018,
+    saturation: 1.38,
+    depthJitter: .014,
+  }),
+  reconstruction: Object.freeze({
+    mode: 'source-depth-triangulated-relief',
+    foreground: 'molecular-cliff-silhouette',
+    emission: 'irradiated-cavity-lip-and-photoevaporation-front',
+    genericSoftClouds: false,
+    genericPointClouds: false,
+  }),
+});
+
+const FUTURE_RELIEF_PROFILE = Object.freeze({
+  volume: Object.freeze({ depth: 40, depthScale: 1.12 }),
+  palette: Object.freeze({ dust: 0x170a16 }),
+  matter: Object.freeze({
+    cloudSuppression: .985,
+    filamentBias: 1,
+    silhouetteBias: .98,
+    edgeGain: 3.5,
+    edgeExponent: 1.12,
+    gasThreshold: .062,
+    dustThreshold: .50,
+    gasOpacity: .78,
+    dustOpacity: .90,
+    alphaCutoff: .024,
+    saturation: 1.48,
+    depthJitter: .012,
+  }),
+  reconstruction: Object.freeze({
+    mode: 'conceptual-eroded-triangulated-relief',
+    basis: 'registered-webb-source-and-depth',
+    genericSoftClouds: false,
+    genericPointClouds: false,
+  }),
+});
+
+const HUBBLE_RELIEF_PROFILE = Object.freeze({
+  volume: Object.freeze({ depth: 27, depthScale: .92 }),
+  palette: Object.freeze({ dust: 0x120a16 }),
+  matter: Object.freeze({
+    cloudSuppression: .975,
+    filamentBias: .98,
+    silhouetteBias: .96,
+    edgeGain: 3.2,
+    edgeExponent: 1.22,
+    gasThreshold: .052,
+    dustThreshold: .46,
+    gasOpacity: .82,
+    dustOpacity: .94,
+    alphaCutoff: .022,
+    saturation: 1.30,
+    depthJitter: .016,
+  }),
+  reconstruction: Object.freeze({
+    mode: 'source-derived-triangulated-relief',
+    basis: 'Hubble RGB structure; off-axis depth is interpretive',
+    genericSoftClouds: false,
+    genericPointClouds: false,
+  }),
+});
 
 function clamp01(value){ return Math.max(0, Math.min(1, value)); }
 function smoothstep(a, b, value){
@@ -77,6 +162,43 @@ function makeFallbackTexture(color){
   return texture;
 }
 
+function makeEdgeMask(){
+  const size = 96;
+  const data = new Uint8Array(size*size*4);
+  for (let y = 0; y < size; y++){
+    for (let x = 0; x < size; x++){
+      const edge = Math.min(x,y,size-1-x,size-1-y)/(size*.055);
+      const value = Math.round(smoothstep(0,1,edge)*255);
+      const offset = (y*size+x)*4;
+      data[offset] = data[offset+1] = data[offset+2] = value;
+      data[offset+3] = 255;
+    }
+  }
+  const texture = new THREE.DataTexture(data,size,size,THREE.RGBAFormat);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function makeSourceDerivedDepth(image){
+  const width = Math.min(720,Math.max(64,image.width || 720));
+  const height = Math.max(32,Math.round(width/
+    Math.max(.01,(image.width || width)/Math.max(1,image.height || width))));
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const context = canvas.getContext('2d',{willReadFrequently:true});
+  context.drawImage(image,0,0,width,height);
+  const frame = context.getImageData(0,0,width,height);
+  for (let offset = 0; offset < frame.data.length; offset += 4){
+    const light = (.299*frame.data[offset]+.587*frame.data[offset+1]+
+      .114*frame.data[offset+2])/255;
+    const depth = Math.round(clamp01(.28+(1-light)*.54)*255);
+    frame.data[offset] = frame.data[offset+1] = frame.data[offset+2] = depth;
+    frame.data[offset+3] = 255;
+  }
+  context.putImageData(frame,0,0);
+  return canvas;
+}
+
 function makeCaption(text, subtext, width = 54){
   const canvas = document.createElement('canvas');
   canvas.width = 1024; canvas.height = 152;
@@ -105,8 +227,10 @@ function makePhotoPlate(scope, parent, {
   url, aspect, width, x = 0, y = 0, z = 0, onTexture = null,
 }){
   const fallback = scope.own(makeFallbackTexture(0x08101b));
+  const edgeMask = scope.own(makeEdgeMask());
   const material = new THREE.MeshBasicMaterial({
     map: fallback,
+    alphaMap: edgeMask,
     color: 0xffffff,
     transparent: true,
     opacity: 1,
@@ -138,41 +262,74 @@ function addCaption(parent, caption, x, y, z = 2){
   return caption;
 }
 
-function makeColoredCloud(seed, count, softMap, { spread, palette, shell = false }){
-  const rnd = mulberry(hashStr(seed));
-  const positions = new Float32Array(count * 3);
-  const colors = new Float32Array(count * 3);
+function setCaptionOpacity(caption, opacity){
+  if (!caption || !caption.material) return;
+  caption.material.opacity = opacity;
+  caption.visible = opacity > .01;
+}
+
+function makeCorrugatedFeedbackShell(seed, count, { spread, palette, thickness, opacity }){
+  const latitudeSegments = Math.max(18, Math.round(Math.sqrt(count)*.48));
+  const longitudeSegments = Math.max(32, Math.round(latitudeSegments*1.85));
+  const positions = [];
+  const colors = [];
+  const indices = [];
   const tones = palette.map(value => new THREE.Color(value));
-  for (let i = 0; i < count; i++){
-    let x = gaussian(rnd), y = gaussian(rnd), z = gaussian(rnd);
-    if (shell){
-      const inv = 1 / Math.max(.001, Math.hypot(x, y, z));
-      const radius = .68 + rnd() * .36;
-      x *= inv * radius; y *= inv * radius; z *= inv * radius;
+  const phase = (hashStr(seed)%997)*.001;
+  for (let latitude = 0; latitude <= latitudeSegments; latitude++){
+    const vertical = latitude/latitudeSegments*2-1;
+    const radial = Math.sqrt(Math.max(0, 1-vertical*vertical));
+    for (let longitude = 0; longitude <= longitudeSegments; longitude++){
+      const angle = longitude/longitudeSegments*Math.PI*2;
+      const ripple = Math.sin(angle*5+vertical*7.2+phase)*.055
+        + Math.sin(angle*13-vertical*11.0)*.026
+        + Math.sin(angle*23+vertical*17.0)*thickness*.16;
+      const corrugation = 1+ripple;
+      positions.push(
+        Math.cos(angle)*radial*spread[0]*corrugation,
+        vertical*spread[1]*corrugation,
+        Math.sin(angle)*radial*spread[2]*corrugation,
+      );
+      const band = Math.floor((angle/(Math.PI*2))*tones.length+(vertical+.5)*1.7);
+      const tone = tones[((band%tones.length)+tones.length)%tones.length];
+      const brightness = .58+.28*(.5+.5*Math.sin(angle*7+vertical*9));
+      colors.push(tone.r*brightness,tone.g*brightness,tone.b*brightness);
     }
-    positions[i*3] = x * spread[0];
-    positions[i*3+1] = y * spread[1];
-    positions[i*3+2] = z * spread[2];
-    const color = tones[(rnd() * tones.length) | 0].clone();
-    const brightness = .34 + rnd() * .72;
-    colors[i*3] = color.r * brightness;
-    colors[i*3+1] = color.g * brightness;
-    colors[i*3+2] = color.b * brightness;
+  }
+  const row = longitudeSegments+1;
+  for (let latitude = 0; latitude < latitudeSegments; latitude++){
+    const vertical = (latitude+.5)/latitudeSegments*2-1;
+    for (let longitude = 0; longitude < longitudeSegments; longitude++){
+      const angle = (longitude+.5)/longitudeSegments*Math.PI*2;
+      // An H II cavity is an opened, torn wall rather than a sealed bubble.
+      // Remove a broad observer-facing mouth and deterministic smaller gaps.
+      const frontMouth = Math.sin(angle)>.48 && Math.abs(vertical)<.72;
+      const torn = Math.sin(angle*11+vertical*19)+Math.cos(angle*5-vertical*13)<-1.22;
+      if (frontMouth || torn) continue;
+      const a = latitude*row+longitude;
+      const b = a+1, c = a+row, d = c+1;
+      indices.push(a,c,b,b,c,d);
+    }
   }
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const material = new THREE.PointsMaterial({
-    map: softMap,
-    size: shell ? 1.05 : 1.35,
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors,3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: shell ? .66 : .54,
-    alphaTest: .018,
-    blending: THREE.AdditiveBlending,
+    opacity: opacity*.72,
+    blending: THREE.NormalBlending,
     depthWrite: false,
+    depthTest: true,
+    side: THREE.DoubleSide,
+    toneMapped: false,
   });
-  return new THREE.Points(geometry, material);
+  const shell = new THREE.Mesh(geometry,material);
+  shell.name = 'broken-corrugated-feedback-cavity-wall';
+  return shell;
 }
 
 function makeGlow(softMap, color, scale){
@@ -189,16 +346,25 @@ function makeGlow(softMap, color, scale){
 }
 
 function buildFormation(parent, softMap){
-  const cloud = makeColoredCloud('carina:formation', BUDGET.ambientPoints, softMap, {
+  const cloud = new THREE.Group();
+  cloud.name = 'structured-feedback-bubble';
+  cloud.add(makeCorrugatedFeedbackShell('carina:formation', BUDGET.formationShellPoints, {
     spread: [43, 29, 32],
     palette: [0x2ac4c9, 0x2472ae, 0xc24e45, 0xf1a05e, 0x723d89],
-    shell: true,
-  });
+    thickness: .14,
+    opacity: .78,
+  }));
+  cloud.userData.ionizationRidges = 'corrugated-cavity-wall-colour';
   parent.add(cloud);
-  const inner = makeColoredCloud('carina:formation:core', Math.round(BUDGET.ambientPoints * .38), softMap, {
-    spread: [28, 18, 19],
-    palette: [0x24a6b6, 0xe05d50, 0xf3bd79],
-  });
+  const inner = makeCorrugatedFeedbackShell(
+    'carina:formation:inner-shell',
+    Math.round(BUDGET.formationShellPoints*.34),
+    {
+      spread: [28, 18, 19],
+      palette: [0x24a6b6, 0xe05d50, 0xf3bd79],
+      thickness: .10,
+      opacity: .54,
+    });
   parent.add(inner);
   const rnd = mulberry(hashStr('carina:first-stars'));
   const stars = [];
@@ -207,10 +373,10 @@ function buildFormation(parent, softMap){
     star.position.set(gaussian(rnd) * 25, gaussian(rnd) * 14, gaussian(rnd) * 13);
     parent.add(star); stars.push(star);
   }
-  addCaption(parent,
-    makeCaption('RECONSTRUCTION', 'A procedural feedback bubble — not an observation', 60),
+  const caption = addCaption(parent,
+    makeCaption('RECONSTRUCTION', 'Corrugated wind / UV cavity model — not an observation', 60),
     0, -38, 9);
-  return { cloud, inner, stars };
+  return { cloud, inner, stars, caption };
 }
 
 function buildLocator(parent){
@@ -290,12 +456,13 @@ function addHomunculusFallback(holder, softMap){
     root.add(lobe);
   }
   const equator = new THREE.Mesh(
-    new THREE.TorusGeometry(10, 2.2, 16, 64),
+    new THREE.RingGeometry(7.8, 12.2, 64, 4),
     new THREE.MeshStandardMaterial({
       color: 0x8d4f58, emissive: 0x261016, roughness: .82,
-      transparent: true, opacity: .62,
+      transparent: true, opacity: .24, side: THREE.DoubleSide,
     }),
   );
+  equator.name = 'broad-homunculus-equatorial-skirt';
   equator.rotation.x = HALF_PI;
   root.add(equator);
   const star = makeGlow(softMap, 0xffe4b2, 7.5);
@@ -329,7 +496,7 @@ function colorizeHomunculus(geometry, majorAxis){
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 }
 
-function loadHomunculus(scope, holder, fallback, softMap){
+function loadHomunculus(scope, holder, fallback){
   import('three/addons/loaders/STLLoader.js').then(scope.guard(({ STLLoader }) => {
     const loader = new STLLoader();
     loader.load(ASSETS.etaModel, geometry => {
@@ -358,19 +525,7 @@ function loadHomunculus(scope, holder, fallback, softMap){
       const scale = 52 / Math.max(...values);
       mesh.scale.setScalar(scale);
 
-      const surfels = new THREE.Points(geometry, new THREE.PointsMaterial({
-        map: softMap,
-        size: TEX_TIER === 'low' ? .5 : .38,
-        vertexColors: true,
-        transparent: true,
-        opacity: .44,
-        alphaTest: .02,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      }));
-      surfels.rotation.copy(mesh.rotation);
-      surfels.scale.copy(mesh.scale);
-      holder.add(mesh, surfels);
+      holder.add(mesh);
       fallback.root.visible = false;
       holder.userData.scientificModelLoaded = true;
     }, undefined, () => {
@@ -386,18 +541,18 @@ function buildEta(scope, parent, softMap){
   modelHolder.position.x = -27;
   parent.add(modelHolder);
   const fallback = addHomunculusFallback(modelHolder, softMap);
-  loadHomunculus(scope, modelHolder, fallback, softMap);
+  loadHomunculus(scope, modelHolder, fallback);
 
   const uv = makePhotoPlate(scope, parent, {
     url: ASSETS.etaUv, aspect: 1, width: 43, x: 30, y: 0, z: 0,
   });
-  addCaption(parent,
+  const modelCaption = addCaption(parent,
     makeCaption('3D SHAPE MODEL', 'Spectroscopy-derived Homunculus geometry', 47),
     -27, -32, 4);
-  addCaption(parent,
+  const uvCaption = addCaption(parent,
     makeCaption('2018 UV DATA', 'Separate Hubble observation — not texture registration', 47),
     30, -27, 4);
-  return { modelHolder, fallback, uv };
+  return { modelHolder, fallback, uv, captions: [modelCaption,uvCaption] };
 }
 
 function imagePixels(image, width, height){
@@ -412,223 +567,92 @@ function pixelLuma(data, index){
   return (.299 * data[index] + .587 * data[index+1] + .114 * data[index+2]) / 255;
 }
 
-/* A deliberately low-frequency Webb-derived colour field, not a second photo
-   plate.  Coarse resampling plus feathered alpha leaves only the broad teal,
-   rose and amber ambience behind the future concept surfels. */
-function makeFutureColorAmbience(photo){
-  const coarse = document.createElement('canvas');
-  coarse.width = 24; coarse.height = Math.max(4, Math.round(24 / WEBB_ASPECT));
-  const coarseCtx = coarse.getContext('2d');
-  coarseCtx.drawImage(photo, 0, 0, coarse.width, coarse.height);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 192; canvas.height = Math.round(192 / WEBB_ASPECT);
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(coarse, 0, 0, canvas.width, canvas.height);
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  for (let y = 0; y < canvas.height; y++){
-    for (let x = 0; x < canvas.width; x++){
-      const edgeX = Math.min(x / (canvas.width * .14), (canvas.width - 1 - x) / (canvas.width * .14), 1);
-      const edgeY = Math.min(y / (canvas.height * .26), (canvas.height - 1 - y) / (canvas.height * .26), 1);
-      const fade = smoothstep(0, 1, Math.max(0, Math.min(edgeX, edgeY)));
-      image.data[(y * canvas.width + x) * 4 + 3] = Math.round(255 * fade);
-    }
-  }
-  ctx.putImageData(image, 0, 0);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: texture,
-    color: 0xffffff,
-    transparent: true,
-    opacity: .20,
-    depthWrite: false,
-    depthTest: false,
-    toneMapped: false,
-  }));
-  sprite.scale.set(PHOTO_WIDTH * 1.18, PHOTO_WIDTH / WEBB_ASPECT * 1.34, 1);
-  sprite.position.z = -22;
-  sprite.renderOrder = -8;
-  return sprite;
+function makeReliefTracker(scope){
+  return {
+    texture: resource => scope.own(resource),
+    material: resource => scope.own(resource),
+    geometry: resource => scope.own(resource),
+  };
 }
 
-function makePhotoDerivedGeometry(photo, depth, softMap, webbHolder, futureHolder){
+/* NASA's Cosmic Cliffs visualization calls out a prominent protostellar jet.
+   Its source pixels already survive in the registered relief; adding a tube
+   or bead chain on top turned the observation into a diagram. */
+function makeCosmicCliffsJet(){
+  const group = new THREE.Group();
+  group.name = 'prominent-protostellar-jet-source-relief';
+  group.userData.materials = [];
+  group.userData.presentation = 'source-depth-relief';
+  group.userData.genericPointClouds = false;
+  return group;
+}
+
+function makeAlignedWebbStars(scope, photo, depth, softMap, parent){
   const iw = photo.width || 16, ih = photo.height || 9;
   const width = BUDGET.photoLongSide;
-  const height = Math.max(2, Math.round(width * ih / iw));
-  const pixels = imagePixels(photo, width, height);
-  const depths = imagePixels(depth, width, height);
-  const worldWidth = PHOTO_WIDTH, worldHeight = PHOTO_WIDTH / WEBB_ASPECT;
-  const surfelPositions = [], surfelColors = [];
-  const ambiencePositions = [], ambienceColors = [];
-  const futurePositions = [], futureColors = [];
-  const starCandidates = [];
-  const webbRnd = mulberry(hashStr('carina:webb-orbit-volume'));
-  const futureRnd = mulberry(hashStr('carina:future-surfels'));
-  const cellX = worldWidth / width, cellY = worldHeight / height;
+  const height = Math.max(2, Math.round(width*ih/iw));
+  const pixels = imagePixels(photo,width,height);
+  const depths = imagePixels(depth,width,height);
+  const cellX = PHOTO_WIDTH/width;
+  const candidates = [];
 
-  for (let py = 1; py < height - 1; py++){
-    for (let px = 1; px < width - 1; px++){
-      const q = py * width + px, i = q * 4;
-      const luma = pixelLuma(pixels, i);
-      if (luma < .028) continue;
+  for (let py = 1; py < height-1; py++){
+    for (let px = 1; px < width-1; px++){
+      const q = py*width+px, offset = q*4;
+      const luma = pixelLuma(pixels,offset);
+      if (luma <= .42) continue;
       let neighbourhood = 0;
-      for (let oy = -1; oy <= 1; oy++)
-        for (let ox = -1; ox <= 1; ox++)
-          if (ox || oy) neighbourhood += pixelLuma(pixels, ((py + oy) * width + px + ox) * 4);
+      for (let oy = -1; oy <= 1; oy++){
+        for (let ox = -1; ox <= 1; ox++){
+          if (ox || oy)
+            neighbourhood += pixelLuma(pixels,((py+oy)*width+px+ox)*4);
+        }
+      }
       neighbourhood /= 8;
-      const contrast = luma - neighbourhood;
-      const isStar = luma > .42 && contrast > .14;
-      // Pixel-centre projection uses the same UV convention as the plate, so
-      // extracted stars remain registered when the head-on image fades away.
-      const x = ((px + .5) / width - .5) * worldWidth;
-      const y = -((py + .5) / height - .5) * worldHeight;
-      const depth01 = depths[i] / 255;
-      const z = (depth01 - .5) * 34;
-      const r = pixels[i] / 255, g = pixels[i+1] / 255, b = pixels[i+2] / 255;
-
-      if (isStar){
-        starCandidates.push({ x, y, z: z + .8, r, g, b, score: contrast * luma });
-        continue;
-      }
-
-      // The canonical plate already owns the exact pixel grid.  Orbit mode
-      // instead samples it into a genuinely thick cloud: stochastic thinning,
-      // sub-cell x/y scatter and several z samples prevent visible rows,
-      // columns and the former single depth-map sheet at oblique angles.
-      if (webbRnd() < .40 + luma * .34){
-        const copies = 1
-          + (webbRnd() < .42 ? 1 : 0)
-          + (luma > .45 && webbRnd() < .20 ? 1 : 0);
-        const xyScatter = .88 + (1 - luma) * .68;
-        const thickness = 2.8 + (1 - luma) * 4.8 + Math.abs(depth01 - .5) * 3.2;
-        const sourceMean = (r + g + b) / 3;
-        const orbitExposure = .64 + luma * .38;
-        const orbitR = clamp01(sourceMean + (r - sourceMean) * 1.68) * orbitExposure;
-        const orbitG = clamp01(sourceMean + (g - sourceMean) * 1.68) * orbitExposure;
-        const orbitB = clamp01(sourceMean + (b - sourceMean) * 1.68) * orbitExposure;
-        for (let copy = 0; copy < copies; copy++){
-          surfelPositions.push(
-            x + gaussian(webbRnd) * cellX * xyScatter,
-            y + gaussian(webbRnd) * cellY * xyScatter,
-            z + gaussian(webbRnd) * thickness,
-          );
-          const grain = .84 + webbRnd() * .30;
-          surfelColors.push(orbitR * grain, orbitG * grain, orbitB * grain);
-        }
-      }
-
-      // A few large, low-opacity samples carry the photograph's broad colour
-      // through multiple depths. They are points, not another planar plate, so
-      // they separate naturally under orbit without becoming repeated images.
-      if (webbRnd() < .014 + luma * .010){
-        ambiencePositions.push(
-          x + gaussian(webbRnd) * cellX * 5.5,
-          y + gaussian(webbRnd) * cellY * 5.5,
-          z + gaussian(webbRnd) * 15,
-        );
-        const ambientMean = (r + g + b) / 3;
-        const ambientR = clamp01(ambientMean + (r - ambientMean) * 1.85);
-        const ambientG = clamp01(ambientMean + (g - ambientMean) * 1.85);
-        const ambientB = clamp01(ambientMean + (b - ambientMean) * 1.85);
-        const ambientGrain = .46 + webbRnd() * .22;
-        ambienceColors.push(
-          ambientR * ambientGrain,
-          ambientG * ambientGrain,
-          ambientB * ambientGrain,
-        );
-      }
-
-      // Concept-only erosion: irregularly thin and scatter the observed field
-      // so an oblique view reads as dusty gas, never a sampled pixel lattice.
-      if (futureRnd() < .46 + luma * .28){
-        const erosion = .035 + (1 - depth01) * .055;
-        const scatter = .7 + (1 - luma) * .85;
-        const copies = luma > .42 && futureRnd() < .22 ? 2 : 1;
-        const photoMean = (r + g + b) / 3;
-        const futureExposure = .62 + luma * .38;
-        const fr = clamp01(photoMean + (r - photoMean) * 1.75) * futureExposure;
-        const fg = clamp01(photoMean + (g - photoMean) * 1.75) * futureExposure;
-        const fb = clamp01(photoMean + (b - photoMean) * 1.75) * futureExposure;
-        for (let copy = 0; copy < copies; copy++){
-          futurePositions.push(
-            x * (1 + erosion) + gaussian(futureRnd) * cellX * scatter,
-            y + (luma - .35) * 5.5 + gaussian(futureRnd) * cellY * scatter,
-            z * 1.18 - 4 + gaussian(futureRnd) * (1.4 + erosion * 12),
-          );
-          const grain = .84 + futureRnd() * .28;
-          futureColors.push(fr * grain, fg * grain, fb * grain);
-        }
-      }
+      const contrast = luma-neighbourhood;
+      if (contrast <= .14) continue;
+      candidates.push({
+        x: ((px+.5)/width-.5)*PHOTO_WIDTH,
+        y: -((py+.5)/height-.5)*(PHOTO_WIDTH/WEBB_ASPECT),
+        z: (depths[offset]/255-.5)*34+.8,
+        r: pixels[offset]/255,
+        g: pixels[offset+1]/255,
+        b: pixels[offset+2]/255,
+        score: contrast*luma,
+      });
     }
   }
 
-  starCandidates.sort((a, b) => b.score - a.score);
-  const stars = starCandidates.slice(0, BUDGET.alignedStars);
-  const starPositions = new Float32Array(stars.length * 3);
-  const starColors = new Float32Array(stars.length * 3);
-  for (let i = 0; i < stars.length; i++){
-    const star = stars[i];
-    starPositions[i*3] = star.x; starPositions[i*3+1] = star.y; starPositions[i*3+2] = star.z;
-    // Preserve and gently separate the sampled stellar hue instead of turning
-    // every extracted point white under additive blending.
-    const mean = (star.r + star.g + star.b) / 3;
-    const red = clamp01(mean + (star.r - mean) * 2.25);
-    const green = clamp01(mean + (star.g - mean) * 2.25);
-    const blue = clamp01(mean + (star.b - mean) * 2.25);
-    const max = Math.max(red, green, blue, .001);
-    const exposure = 1 / max;
-    starColors[i*3] = red * exposure;
-    starColors[i*3+1] = green * exposure;
-    starColors[i*3+2] = blue * exposure;
+  candidates.sort((a,b) => b.score-a.score);
+  const stars = [];
+  for (const candidate of candidates){
+    if (stars.some(other => {
+      const dx = other.x-candidate.x, dy = other.y-candidate.y;
+      return dx*dx+dy*dy < cellX*cellX*10;
+    })) continue;
+    stars.push(candidate);
+    if (stars.length >= BUDGET.alignedStars) break;
   }
 
-  const surfelGeometry = new THREE.BufferGeometry();
-  surfelGeometry.setAttribute('position', new THREE.Float32BufferAttribute(surfelPositions, 3));
-  surfelGeometry.setAttribute('color', new THREE.Float32BufferAttribute(surfelColors, 3));
-  const surfelMaterial = new THREE.PointsMaterial({
-    map: softMap,
-    size: TEX_TIER === 'low' ? 1.48 : 1.16,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0,
-    alphaTest: .018,
-    blending: THREE.NormalBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
-  const surfels = new THREE.Points(surfelGeometry, surfelMaterial);
-  surfels.name = 'irregular-multi-depth-webb-surfels';
+  const positions = new Float32Array(stars.length*3);
+  const colors = new Float32Array(stars.length*3);
+  for (let i = 0; i < stars.length; i++){
+    const star = stars[i];
+    positions.set([star.x,star.y,star.z],i*3);
+    const mean = (star.r+star.g+star.b)/3;
+    const red = clamp01(mean+(star.r-mean)*2.25);
+    const green = clamp01(mean+(star.g-mean)*2.25);
+    const blue = clamp01(mean+(star.b-mean)*2.25);
+    const exposure = 1/Math.max(red,green,blue,.001);
+    colors.set([red*exposure,green*exposure,blue*exposure],i*3);
+  }
 
-  const ambienceGeometry = new THREE.BufferGeometry();
-  ambienceGeometry.setAttribute('position', new THREE.Float32BufferAttribute(ambiencePositions, 3));
-  ambienceGeometry.setAttribute('color', new THREE.Float32BufferAttribute(ambienceColors, 3));
-  const ambienceMaterial = new THREE.PointsMaterial({
+  const geometry = scope.own(new THREE.BufferGeometry());
+  geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
+  const material = scope.own(new THREE.PointsMaterial({
     map: softMap,
-    size: TEX_TIER === 'low' ? 7.2 : 8.8,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0,
-    alphaTest: .008,
-    blending: THREE.NormalBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
-  const ambience = new THREE.Points(ambienceGeometry, ambienceMaterial);
-  ambience.name = 'depth-separated-webb-color-ambience';
-  ambience.renderOrder = -2;
-  webbHolder.add(ambience);
-  webbHolder.add(surfels);
-
-  const starGeometry = new THREE.BufferGeometry();
-  starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-  starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-  const starMaterial = new THREE.PointsMaterial({
-    map: softMap,
-    size: TEX_TIER === 'low' ? 2.0 : 1.55,
+    size: TEX_TIER === 'low' ? 2 : 1.55,
     vertexColors: true,
     transparent: true,
     opacity: 0,
@@ -636,40 +660,126 @@ function makePhotoDerivedGeometry(photo, depth, softMap, webbHolder, futureHolde
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     toneMapped: false,
-  });
-  const alignedStars = new THREE.Points(starGeometry, starMaterial);
-  alignedStars.name = 'photo-aligned-colored-stars';
-  webbHolder.add(alignedStars);
+  }));
+  const points = new THREE.Points(geometry,material);
+  points.name = 'source-and-depth-aligned-colored-stars';
+  points.userData.allowedPointRole = 'registered-stellar-sources';
+  parent.add(points);
+  return { points, count: stars.length };
+}
 
-  const futureGeometry = new THREE.BufferGeometry();
-  futureGeometry.setAttribute('position', new THREE.Float32BufferAttribute(futurePositions, 3));
-  futureGeometry.setAttribute('color', new THREE.Float32BufferAttribute(futureColors, 3));
-  const futureMaterial = new THREE.PointsMaterial({
-    map: softMap,
-    size: TEX_TIER === 'low' ? 1.62 : 1.30,
-    vertexColors: true,
-    transparent: true,
-    opacity: .82,
-    alphaTest: .018,
-    blending: THREE.NormalBlending,
-    depthWrite: false,
-    toneMapped: false,
+function makePhotoDerivedGeometry(scope, photo, depth, softMap, webbHolder, futureHolder){
+  const tracker = makeReliefTracker(scope);
+  const reliefScale = PHOTO_WIDTH/(62*WEBB_ASPECT);
+  const webbReliefRoot = new THREE.Group();
+  webbReliefRoot.name = 'webb-source-depth-relief-root';
+  webbReliefRoot.scale.set(reliefScale,reliefScale,1);
+  webbHolder.add(webbReliefRoot);
+  const webbReveal = { value: 0 };
+  const webbRelief = buildPhotoRelief({
+    parent: webbReliefRoot,
+    image: photo,
+    depthImage: depth,
+    aspect: WEBB_ASPECT,
+    profile: WEBB_RELIEF_PROFILE,
+    budget: {
+      reliefSample: BUDGET.photoLongSide,
+      reliefTriangles: BUDGET.reliefTriangles,
+      dustTriangles: BUDGET.dustTriangles,
+    },
+    tracker,
+    reveal: webbReveal,
+    seed: 'carina:webb:triangulated-relief',
   });
-  const future = new THREE.Points(futureGeometry, futureMaterial);
-  future.name = 'irregular-webb-palette-concept-surfels';
-  futureHolder.add(makeFutureColorAmbience(photo));
-  futureHolder.add(future);
-  return { surfels, ambience, alignedStars, future };
+  if (webbRelief.emission)
+    webbRelief.emission.name = 'webb-source-depth-ionized-front-relief';
+  if (webbRelief.silhouette)
+    webbRelief.silhouette.name = 'webb-depth-aligned-molecular-cliff-relief';
+  webbRelief.update(0);
+
+  const futureReliefRoot = new THREE.Group();
+  futureReliefRoot.name = 'future-eroded-source-depth-relief-root';
+  futureReliefRoot.scale.set(reliefScale*1.055,reliefScale*1.09,1.12);
+  futureReliefRoot.position.set(0,1.8,-4);
+  futureHolder.add(futureReliefRoot);
+  const futureReveal = { value: 1 };
+  const futureRelief = buildPhotoRelief({
+    parent: futureReliefRoot,
+    image: photo,
+    depthImage: depth,
+    aspect: WEBB_ASPECT,
+    profile: FUTURE_RELIEF_PROFILE,
+    budget: {
+      reliefSample: BUDGET.photoLongSide,
+      reliefTriangles: BUDGET.futureTriangles,
+      dustTriangles: BUDGET.futureDustTriangles,
+    },
+    tracker,
+    reveal: futureReveal,
+    seed: 'carina:future:triangulated-relief',
+  });
+  if (futureRelief.emission)
+    futureRelief.emission.name = 'future-concept-eroded-emission-relief';
+  if (futureRelief.silhouette)
+    futureRelief.silhouette.name = 'future-concept-eroded-dust-relief';
+  futureRelief.update(1);
+
+  const alignedStars = makeAlignedWebbStars(scope,photo,depth,softMap,webbHolder);
+  const jet = makeCosmicCliffsJet();
+  webbHolder.add(jet);
+  webbHolder.userData.genericPointClouds = false;
+  futureHolder.userData.genericPointClouds = false;
+  webbHolder.userData.morphologyCounts = {
+    ...webbRelief.counts,
+    alignedStars: alignedStars.count,
+    jetPresentation: 'source-depth-relief',
+  };
+  return {
+    webbRelief,
+    webbReveal,
+    futureRelief,
+    futureReveal,
+    jet,
+    alignedStars: alignedStars.points,
+  };
 }
 
 function buildHubble(scope, parent){
+  const reliefReveal = { value: 0 };
+  const reliefRoot = new THREE.Group();
+  reliefRoot.name = 'hubble-source-derived-relief-root';
+  const reliefScale = (PHOTO_WIDTH/HUBBLE_ASPECT)/62;
+  reliefRoot.scale.set(reliefScale,reliefScale,1);
+  parent.add(reliefRoot);
+  let relief = null;
   const plate = makePhotoPlate(scope, parent, {
     url: ASSETS.hubble, aspect: HUBBLE_ASPECT, width: PHOTO_WIDTH,
+    onTexture: texture => {
+      if (relief || !texture.image) return;
+      relief = buildPhotoRelief({
+        parent: reliefRoot,
+        image: texture.image,
+        depthImage: makeSourceDerivedDepth(texture.image),
+        aspect: HUBBLE_ASPECT,
+        profile: HUBBLE_RELIEF_PROFILE,
+        budget: {
+          reliefSample: BUDGET.photoLongSide,
+          reliefTriangles: BUDGET.reliefTriangles,
+          dustTriangles: BUDGET.dustTriangles,
+        },
+        tracker: makeReliefTracker(scope),
+        reveal: reliefReveal,
+        seed: 'carina:hubble:source-derived-relief',
+      });
+      relief.update(0);
+      reliefRoot.userData.interpretiveDepth = true;
+      reliefRoot.userData.genericPointClouds = false;
+    },
   });
-  addCaption(parent,
+  const caption = addCaption(parent,
     makeCaption('HUBBLE · 2007 RELEASE', 'Wide Carina mosaic — its own observed field', 64),
     0, -plate.height / 2 - 6, 3);
-  return { plate };
+  return { plate, caption, reliefReveal, reliefRoot, get relief(){ return relief; } };
 }
 
 function buildWebb(scope, parent, futureParent, softMap){
@@ -680,7 +790,14 @@ function buildWebb(scope, parent, futureParent, softMap){
   let photo = null, depth = null, photoDerived = null;
   const finish = () => {
     if (!photoDerived && photo && depth)
-      photoDerived = makePhotoDerivedGeometry(photo.image, depth.image, softMap, volume, futureVolume);
+      photoDerived = makePhotoDerivedGeometry(
+        scope,
+        photo.image,
+        depth.image,
+        softMap,
+        volume,
+        futureVolume,
+      );
   };
   const plate = makePhotoPlate(scope, parent, {
     url: ASSETS.webb,
@@ -688,16 +805,14 @@ function buildWebb(scope, parent, futureParent, softMap){
     width: PHOTO_WIDTH,
     onTexture: texture => { photo = texture; finish(); },
   });
-  addCaption(parent,
+  const caption = addCaption(parent,
     makeCaption('WEBB · NIRCAM + MIRI', 'Exact head-on plate · orbit reveals inferred depth', 68),
     0, -plate.height / 2 - 6, 3);
   loadTexture(ASSETS.webbDepth, scope.guard(texture => { depth = texture; finish(); }), { srgb: false });
 
-  addCaption(futureParent,
-    makeCaption('CONCEPT / MODEL', 'Webb-derived palette · illustrative erosion · no forecast', 68),
-    0, -30, 4);
   return {
     plate,
+    caption,
     volume,
     futureVolume,
     get photoDerived(){ return photoDerived; },
@@ -731,7 +846,7 @@ export function buildCarinaFeatured(){
   const formation = buildFormation(states.get(CARINA_STATES.FORMATION), softMap);
   buildLocator(states.get(CARINA_STATES.LOCATOR));
   const eta = buildEta(scope, states.get(CARINA_STATES.ETA_ERUPTION), softMap);
-  buildHubble(scope, states.get(CARINA_STATES.HUBBLE));
+  const hubble = buildHubble(scope, states.get(CARINA_STATES.HUBBLE));
   const webb = buildWebb(
     scope,
     states.get(CARINA_STATES.WEBB),
@@ -764,6 +879,14 @@ export function buildCarinaFeatured(){
   selectState(activeState);
   group.userData.qualityBudget = BUDGET;
   group.userData.observationFields = 'separate-no-crossfade';
+  group.userData.genericSoftClouds = false;
+  group.userData.genericPointClouds = false;
+  group.userData.webbMorphology = {
+    source: 'Exact Webb plate head-on; indexed source/depth triangle relief and registered stellar sources off-axis.',
+    cavity: 'The ridge represents the near wall of the Gum 31 cavity carved by NGC 3324.',
+    streamers: 'Broken relief facets trace the irradiated lip and photoevaporating structure; no generic gas or dust point clouds.',
+    jet: 'The prominent upper-right outflow is retained by its source/depth relief pixels; no diagrammatic tube is overlaid.',
+  };
 
   return {
     group,
@@ -781,6 +904,7 @@ export function buildCarinaFeatured(){
       if (scope.disposed) return;
       elapsed += dt;
       if (activeState === CARINA_STATES.FORMATION){
+        setCaptionOpacity(formation.caption,canonicalHeadOn(camera));
         formation.cloud.rotation.y += dt * .022;
         formation.inner.rotation.y -= dt * .014;
         for (let i = 0; i < formation.stars.length; i++){
@@ -790,16 +914,37 @@ export function buildCarinaFeatured(){
       } else if (activeState === CARINA_STATES.ETA_ERUPTION){
         const pulse = 1 + Math.sin(elapsed * 1.6) * .08;
         eta.fallback.star.scale.setScalar(7.5 * pulse);
+        const headOn = canonicalHeadOn(camera);
+        eta.uv.material.opacity = headOn;
+        for (const caption of eta.captions) setCaptionOpacity(caption,headOn);
+      } else if (activeState === CARINA_STATES.HUBBLE){
+        const headOn = canonicalHeadOn(camera);
+        const reveal = 1-headOn;
+        hubble.plate.material.opacity = headOn;
+        setCaptionOpacity(hubble.caption,headOn);
+        hubble.reliefReveal.value = reveal;
+        if (hubble.relief) hubble.relief.update(reveal);
       } else if (activeState === CARINA_STATES.WEBB){
         const headOn = canonicalHeadOn(camera);
         webb.plate.material.opacity = headOn;
+        setCaptionOpacity(webb.caption,headOn);
         const derived = webb.photoDerived;
         if (derived){
-          derived.surfels.material.opacity = .82 * (1 - headOn);
-          derived.ambience.material.opacity = .15 * (1 - headOn);
-          derived.alignedStars.material.opacity = .98 * (1 - headOn);
+          const reveal = 1 - headOn;
+          derived.webbReveal.value = reveal;
+          derived.webbRelief.update(reveal);
+          for (const material of derived.jet.userData.materials)
+            material.opacity = .88*reveal;
+          derived.alignedStars.material.opacity = .98 * reveal;
+          derived.jet.visible = reveal > .018;
+          derived.alignedStars.visible = reveal > .004;
         }
       } else if (activeState === CARINA_STATES.FUTURE){
+        const derived = webb.photoDerived;
+        if (derived){
+          derived.futureReveal.value = 1;
+          derived.futureRelief.update(1);
+        }
         webb.futureVolume.rotation.y = Math.sin(elapsed * .08) * .16;
       }
     },

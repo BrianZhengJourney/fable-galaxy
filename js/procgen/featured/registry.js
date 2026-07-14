@@ -36,7 +36,7 @@ const FEATURED_BUILDERS = new Map([
     renderer: 'pale-blue-dot-multi-state', build: buildPaleBlueDotFeatured,
   }],
   ...NEBULA_PROFILE_IDS.map(id => [id, {
-    renderer: 'nebula-photo-hybrid-v1', build: buildNebulaCollectionFeatured,
+    renderer: 'nebula-photo-sculpt-v2', build: buildNebulaCollectionFeatured,
   }]),
 ]);
 

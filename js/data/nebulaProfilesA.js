@@ -1,5 +1,11 @@
 /* Science-led, serializable rendering profiles for the first nebula group.
-   Dimensions are presentation-space proportions, not measured parsecs. */
+   Dimensions are presentation-space proportions, not measured parsecs.
+
+   `matter` tunes photo/depth-derived surfels. `reconstruction` is the crisp,
+   object-specific geometry contract consumed by the shared renderer. All UV
+   coordinates use the source plate with [0,0] at top-left and [1,1] at
+   bottom-right; positive z is toward the visitor. At the canonical head-on
+   camera every reconstructed feature collapses behind the exact source RGB. */
 
 export const NEBULA_PROFILES_A = {
   'orion-nebula': {
@@ -12,6 +18,22 @@ export const NEBULA_PROFILES_A = {
       depthScale: 1.12,
       light: [0.06, 0.2, 1],
     },
+    matter: {
+      sampleWidth: 288,
+      gasTriangles: 12800,
+      dustTriangles: 3200,
+      saturation: 1.16,
+      gasThreshold: 0.052,
+      dustThreshold: 0.44,
+      gasOpacity: 0.58,
+      dustOpacity: 0.9,
+      edgeGain: 2.9,
+      edgeExponent: 1.55,
+      cloudSuppression: 0.94,
+      filamentBias: 0.82,
+      depthJitter: 0.045,
+      alphaCutoff: 0.028,
+    },
     palette: {
       inner: 0x67b8c9,
       outer: 0xd06772,
@@ -19,8 +41,8 @@ export const NEBULA_PROFILES_A = {
       dust: 0x120b14,
     },
     sources: [
-      { position: [1, -2, 3], size: 5.4, color: 0xd9f1ff, label: 'THETA 1 ORIONIS C' },
-      { position: [-2.4, -1.1, 1], size: 2.8, color: 0xbfdcff, label: 'TRAPEZIUM CLUSTER' },
+      { position: [1, -2, 3], photoUv: [0.476, 0.506], size: 5.4, color: 0xd9f1ff, label: 'THETA 1 ORIONIS C' },
+      { position: [-2.4, -1.1, 1], photoUv: [0.458, 0.518], size: 2.8, color: 0xbfdcff, label: 'TRAPEZIUM CLUSTER' },
     ],
     structure: {
       width: 48,
@@ -34,7 +56,81 @@ export const NEBULA_PROFILES_A = {
       openingDirection: [0, 0, 1],
       starSeparationPx: 12,
     },
+    reconstruction: {
+      mode: 'registered-relief',
+      coordinateSpace: 'uv-top-left',
+      plateAspect: 1,
+      exactHeadOn: true,
+      revealAngleDeg: [2.5, 17],
+      genericCloudOpacity: 0,
+      depthLayers: [
+        {
+          id: 'foreground-veil', role: 'thin-ionized-veil', z: 7.5,
+          thickness: 0.7, opacity: 0.16, selection: 'low-contrast-blue-green',
+          region: [[0.02,0.02],[0.98,0.02],[0.98,0.98],[0.02,0.98]],
+        },
+        {
+          id: 'main-ionization-wall', role: 'bowl-surface', z: -3,
+          thickness: 1.1, opacity: 0.72, selection: 'highpass-emission',
+          region: [[0.05,0.16],[0.83,0.14],[0.96,0.70],[0.72,0.96],[0.15,0.91],[0.02,0.46]],
+        },
+        {
+          id: 'molecular-cloud-back', role: 'cold-cloud-wall', z: -14,
+          thickness: 2.4, opacity: 0.78, selection: 'dark-ridge',
+          region: [[0.00,0.08],[0.48,0.10],[0.55,0.36],[0.35,0.53],[0.00,0.54]],
+        },
+      ],
+      features: [
+        {
+          id: 'orion-bright-bar', kind: 'ridge', colorRole: 'accent',
+          path: [[0.08,0.47],[0.17,0.45],[0.27,0.43],[0.38,0.44],[0.48,0.48]],
+          widthUv: 0.012, z: 1.8, thickness: 0.9, opacity: 0.88,
+          sharpness: 0.94, taper: 0.28,
+        },
+        {
+          id: 'dark-bay-front', kind: 'silhouette', colorRole: 'dust',
+          polygon: [[0.18,0.13],[0.30,0.18],[0.34,0.29],[0.28,0.37],[0.20,0.43],[0.12,0.36],[0.12,0.23]],
+          z: 6.8, thickness: 3.2, opacity: 0.96, edgeFeatherUv: 0.004,
+        },
+        {
+          id: 'm43-ionization-bubble', kind: 'shell-arc', colorRole: 'outer',
+          centerUv: [0.44,0.22], radiiUv: [0.105,0.095], axisTiltDeg: -8,
+          arcDeg: [28,342], widthUv: 0.008, z: -2.8, thickness: 1.3,
+          opacity: 0.68, breakup: 0.23,
+        },
+        {
+          id: 'orion-southeast-cavity-lip', kind: 'ridge', colorRole: 'outer',
+          path: [[0.37,0.74],[0.32,0.68],[0.30,0.60],[0.34,0.53],[0.43,0.48]],
+          widthUv: 0.016, z: -0.8, thickness: 1.2, opacity: 0.76,
+          sharpness: 0.9, taper: 0.18,
+        },
+        {
+          id: 'trapezium-proplyds', kind: 'proplyd-field', colorRole: 'inner',
+          region: [[0.33,0.42],[0.54,0.42],[0.56,0.60],[0.34,0.61]],
+          count: 34, headRadiusUv: [0.0012,0.0035], tailLengthUv: [0.006,0.022],
+          tailDirectionUv: [-0.55,0.84], z: [0.8,5.2], opacity: 0.82,
+        },
+        {
+          id: 'll-ori-like-bow-shocks', kind: 'bow-shock-field', colorRole: 'accent',
+          region: [[0.24,0.34],[0.70,0.34],[0.78,0.76],[0.20,0.76]],
+          count: 11, radiusUv: [0.006,0.019], openingDeg: [72,122],
+          facingUv: [-0.58,-0.82], z: [0.5,4.5], widthUv: 0.0015,
+          opacity: 0.72,
+        },
+        {
+          id: 'southwest-outflow-wisps', kind: 'filament-bundle', colorRole: 'inner',
+          path: [[0.43,0.51],[0.35,0.58],[0.29,0.70],[0.26,0.86]],
+          count: 18, widthUv: [0.0012,0.004], spreadUv: 0.026,
+          z: [-1,4], depthSpread: 2.2, opacity: 0.66, taper: 0.62,
+        },
+      ],
+    },
     source: 'https://science.nasa.gov/missions/hubble/nasa-space-telescopes-provide-a-3d-journey-through-the-orion-nebula/',
+    references: [
+      'https://science.nasa.gov/missions/hubble/nasa-space-telescopes-provide-a-3d-journey-through-the-orion-nebula/',
+      'https://science.nasa.gov/asset/hubble/hubbles-sharpest-view-of-the-orion-nebula/',
+      'https://esahubble.org/news/heic0917/',
+    ],
     caveat: 'The blister-like foreground cavity is observationally motivated; its off-axis wall depth and individual clump positions are interpretive, not tomography.',
   },
 
@@ -47,6 +143,23 @@ export const NEBULA_PROFILES_A = {
       shade: 0.82,
       depthScale: 1.22,
       light: [0.95, 0.2, 0.1],
+    },
+    matter: {
+      sampleWidth: 300,
+      gasTriangles: 10800,
+      dustTriangles: 4700,
+      saturation: 1.1,
+      gasThreshold: 0.068,
+      dustThreshold: 0.34,
+      gasOpacity: 0.5,
+      dustOpacity: 0.98,
+      edgeGain: 3.35,
+      edgeExponent: 1.72,
+      cloudSuppression: 0.98,
+      filamentBias: 0.9,
+      silhouetteBias: 1,
+      depthJitter: 0.028,
+      alphaCutoff: 0.04,
     },
     palette: {
       inner: 0xf0a469,
@@ -71,7 +184,83 @@ export const NEBULA_PROFILES_A = {
       striations: 56,
       starSeparationPx: 13,
     },
+    reconstruction: {
+      mode: 'registered-relief',
+      coordinateSpace: 'uv-top-left',
+      plateAspect: 1.0175,
+      exactHeadOn: true,
+      revealAngleDeg: [2, 15],
+      genericCloudOpacity: 0,
+      illuminationDirectionUv: [-0.98, -0.18],
+      depthLayers: [
+        {
+          id: 'ic434-emission-screen', role: 'background-hii-sheet', z: -18,
+          thickness: 1.1, opacity: 0.7, selection: 'red-emission-highpass',
+          region: [[0,0],[1,0],[1,0.66],[0,0.66]],
+        },
+        {
+          id: 'l1630-cloud-bed', role: 'parent-molecular-cloud', z: 2.5,
+          thickness: 6.5, opacity: 0.94, selection: 'dark-ridge',
+          region: [[0,0.42],[1,0.42],[1,1],[0,1]],
+        },
+        {
+          id: 'ngc2023-reflection', role: 'reflection-cavity', z: -3.5,
+          thickness: 1.8, opacity: 0.62, selection: 'cyan-reflection',
+          region: [[0.06,0.66],[0.39,0.66],[0.39,1],[0.06,1]],
+        },
+      ],
+      features: [
+        {
+          id: 'barnard33-body', kind: 'silhouette', colorRole: 'dust',
+          polygon: [[0.47,0.75],[0.45,0.65],[0.47,0.56],[0.49,0.48],[0.49,0.39],[0.46,0.35],[0.47,0.31],[0.51,0.29],[0.53,0.25],[0.58,0.26],[0.61,0.30],[0.62,0.36],[0.60,0.40],[0.60,0.50],[0.58,0.59],[0.59,0.72],[0.65,0.82],[0.39,0.85]],
+          z: 8.5, thickness: 8.2, opacity: 1, edgeFeatherUv: 0.0025,
+          extrusionTaper: 0.32,
+        },
+        {
+          id: 'horsehead-pdr-skin', kind: 'ridge', colorRole: 'accent',
+          path: [[0.45,0.63],[0.48,0.50],[0.48,0.39],[0.46,0.35],[0.49,0.30],[0.53,0.26],[0.58,0.27],[0.61,0.32],[0.60,0.40],[0.58,0.48]],
+          widthUv: 0.0045, z: 7.1, thickness: 0.65, opacity: 0.92,
+          sharpness: 1, taper: 0.14,
+        },
+        {
+          id: 'mane-scallops', kind: 'filament-bundle', colorRole: 'accent',
+          path: [[0.45,0.63],[0.47,0.50],[0.48,0.38],[0.52,0.27],[0.60,0.31]],
+          count: 26, widthUv: [0.0007,0.0022], spreadUv: 0.011,
+          z: [6.4,8.4], depthSpread: 0.55, opacity: 0.8, taper: 0.48,
+        },
+        {
+          id: 'photoevaporative-striations', kind: 'filament-field', colorRole: 'outer',
+          region: [[0.05,0.04],[0.96,0.04],[0.96,0.53],[0.05,0.53]],
+          count: 78, orientationDeg: 86, orientationJitterDeg: 9,
+          lengthUv: [0.03,0.17], widthUv: [0.00045,0.0015],
+          z: [-16,-11], depthSpread: 0.7, opacity: 0.5,
+        },
+        {
+          id: 'cloud-bed-ionization-front', kind: 'ridge', colorRole: 'outer',
+          path: [[0.00,0.43],[0.10,0.41],[0.21,0.44],[0.31,0.42],[0.40,0.45],[0.47,0.43],[0.58,0.45],[0.68,0.43],[0.79,0.46],[0.90,0.42],[1.00,0.45]],
+          widthUv: 0.009, z: 3.2, thickness: 1.1, opacity: 0.84,
+          sharpness: 0.96, taper: 0.08,
+        },
+        {
+          id: 'neck-filament', kind: 'ridge', colorRole: 'dust',
+          path: [[0.55,0.43],[0.55,0.52],[0.54,0.63],[0.57,0.76],[0.62,0.88]],
+          widthUv: 0.043, z: 8.1, thickness: 5.2, opacity: 0.98,
+          sharpness: 0.94, taper: 0.42,
+        },
+        {
+          id: 'ngc2023-blue-rim', kind: 'shell-arc', colorRole: 'inner',
+          centerUv: [0.22,0.82], radiiUv: [0.105,0.12], axisTiltDeg: -18,
+          arcDeg: [198,520], widthUv: 0.008, z: -2.5, thickness: 1.5,
+          opacity: 0.65, breakup: 0.38,
+        },
+      ],
+    },
     source: 'https://science.nasa.gov/missions/webb/webb-captures-top-of-iconic-horsehead-nebula-in-unprecedented-detail/',
+    references: [
+      'https://science.nasa.gov/missions/webb/webb-captures-top-of-iconic-horsehead-nebula-in-unprecedented-detail/',
+      'https://www.esa.int/Science_Exploration/Space_Science/Webb/Webb_captures_iconic_Horsehead_Nebula_in_unprecedented_detail',
+      'https://arxiv.org/abs/astro-ph/0501536',
+    ],
     caveat: 'The Horsehead is modeled as an attached, edge-on molecular ridge silhouetted against IC 434; thickness and line-of-sight folds are interpretive.',
   },
 
@@ -85,6 +274,23 @@ export const NEBULA_PROFILES_A = {
       depthScale: 1.08,
       light: [0, 0, 1],
     },
+    matter: {
+      sampleWidth: 300,
+      gasTriangles: 9600,
+      dustTriangles: 2300,
+      saturation: 1.08,
+      gasThreshold: 0.078,
+      dustThreshold: 0.48,
+      gasOpacity: 0.48,
+      dustOpacity: 0.84,
+      edgeGain: 3.6,
+      edgeExponent: 1.8,
+      cloudSuppression: 1,
+      filamentBias: 0.94,
+      silhouetteBias: 0.86,
+      depthJitter: 0.022,
+      alphaCutoff: 0.045,
+    },
     palette: {
       inner: 0x55bfc5,
       outer: 0xd95850,
@@ -92,7 +298,7 @@ export const NEBULA_PROFILES_A = {
       dust: 0x130a0b,
     },
     sources: [
-      { position: [0, 0, 0], size: 4.6, color: 0xe6f4ff, label: 'WHITE DWARF' },
+      { position: [0, 0, 0], photoUv: [0.51, 0.50], size: 4.6, color: 0xe6f4ff, label: 'WHITE DWARF' },
     ],
     structure: {
       ringRadius: 27.5,
@@ -107,7 +313,82 @@ export const NEBULA_PROFILES_A = {
       centralStarScale: 4.3,
       starSeparationPx: 11,
     },
+    reconstruction: {
+      mode: 'registered-relief',
+      coordinateSpace: 'uv-top-left',
+      plateAspect: 0.9793,
+      exactHeadOn: true,
+      revealAngleDeg: [2, 14],
+      genericCloudOpacity: 0,
+      depthLayers: [
+        {
+          id: 'near-torus-half', role: 'nitrogen-rich-near-rim', z: 5.2,
+          thickness: 2.2, opacity: 0.84, selection: 'orange-red-ring',
+          region: [[0.12,0.14],[0.88,0.14],[0.88,0.90],[0.12,0.90]],
+        },
+        {
+          id: 'helium-football', role: 'polar-lobe-volume', z: -1,
+          thickness: 27, opacity: 0.48, selection: 'blue-cyan-core',
+          region: [[0.27,0.23],[0.74,0.23],[0.74,0.77],[0.27,0.77]],
+        },
+        {
+          id: 'far-torus-half', role: 'oxygen-rich-far-rim', z: -5.2,
+          thickness: 2.2, opacity: 0.62, selection: 'green-cyan-ring',
+          region: [[0.12,0.14],[0.88,0.14],[0.88,0.90],[0.12,0.90]],
+        },
+        {
+          id: 'outer-scalloped-halo', role: 'early-mass-loss-halo', z: -8.5,
+          thickness: 3.8, opacity: 0.28, selection: 'faint-red-halo',
+          region: [[0.07,0.07],[0.93,0.07],[0.93,0.94],[0.07,0.94]],
+        },
+      ],
+      features: [
+        {
+          id: 'main-thick-torus', kind: 'shell-ring', colorRole: 'outer',
+          centerUv: [0.51,0.50], radiiUv: [0.305,0.335], innerRadiiUv: [0.215,0.235],
+          axisTiltDeg: -4, inclinationDeg: 13, z: 0, thickness: 8,
+          opacity: 0.82, edgeSharpness: 0.94, azimuthalBreakup: 0.18,
+        },
+        {
+          id: 'football-lobes', kind: 'bipolar-shell', colorRole: 'inner',
+          centerUv: [0.51,0.50], axisDeg: -5, radiusUv: 0.215,
+          lobeLength: 70, lobeRadius: 17, z: 0, wallThickness: 0.85,
+          opacity: 0.48, openEnds: true,
+        },
+        {
+          id: 'inner-rim-knot-heads', kind: 'knot-band', colorRole: 'dust',
+          centerUv: [0.51,0.50], radiusUv: [0.222,0.244], axisTiltDeg: -4,
+          count: 820, headRadiusUv: [0.0011,0.0032], tailLengthUv: [0.007,0.026],
+          tailDirection: 'radial-outward', z: [2.6,6.4], depthSpread: 1.2,
+          opacity: 0.94,
+        },
+        {
+          id: 'knot-shadow-spokes', kind: 'radial-filament-band', colorRole: 'dust',
+          centerUv: [0.51,0.50], radiusUv: [0.22,0.39], count: 96,
+          widthUv: [0.00045,0.0018], z: [-0.5,3.2], opacity: 0.58,
+          angularJitterDeg: 1.6,
+        },
+        {
+          id: 'outer-halo-scallops', kind: 'broken-shell-arcs', colorRole: 'outer',
+          centerUv: [0.51,0.50], radiusUv: [0.36,0.415], axisRatio: 1.04,
+          arcCount: 17, arcLengthDeg: [8,28], widthUv: [0.002,0.006],
+          z: [-10,-6], depthSpread: 1.4, opacity: 0.36, breakup: 0.62,
+        },
+        {
+          id: 'ionization-stratification', kind: 'concentric-rims',
+          centerUv: [0.51,0.50], radiiUv: [0.232,0.264,0.302,0.337],
+          colorRoles: ['inner','inner','accent','outer'], widthsUv: [0.006,0.008,0.011,0.014],
+          z: [0.8,1.5,2.6,3.8], opacity: [0.5,0.58,0.7,0.76],
+          edgeSharpness: 0.92,
+        },
+      ],
+    },
     source: 'https://science.nasa.gov/missions/hubble/nasas-hubble-space-telescope-reveals-the-ring-nebulas-true-shape/',
+    references: [
+      'https://science.nasa.gov/missions/hubble/nasas-hubble-space-telescope-reveals-the-ring-nebulas-true-shape/',
+      'https://science.nasa.gov/asset/hubble/hubble-reveals-the-ring-nebulas-true-shape/',
+      'https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-57/',
+    ],
     caveat: 'The thick torus plus line-of-sight football-shaped lobes follows the accepted 3D interpretation; small knots and halo depths are illustrative.',
   },
 
@@ -121,6 +402,23 @@ export const NEBULA_PROFILES_A = {
       depthScale: 1.16,
       light: [0, 0, 1],
     },
+    matter: {
+      sampleWidth: 304,
+      gasTriangles: 11200,
+      dustTriangles: 3600,
+      saturation: 1.08,
+      gasThreshold: 0.072,
+      dustThreshold: 0.46,
+      gasOpacity: 0.46,
+      dustOpacity: 0.9,
+      edgeGain: 3.45,
+      edgeExponent: 1.74,
+      cloudSuppression: 1,
+      filamentBias: 0.96,
+      silhouetteBias: 0.9,
+      depthJitter: 0.026,
+      alphaCutoff: 0.042,
+    },
     palette: {
       inner: 0x57bad0,
       outer: 0xd35c4f,
@@ -128,7 +426,7 @@ export const NEBULA_PROFILES_A = {
       dust: 0x120b0a,
     },
     sources: [
-      { position: [0, 0, 0], size: 4.8, color: 0xe8f3ff, label: 'HELIX CENTRAL STAR' },
+      { position: [0, 0, 0], photoUv: [0.505, 0.49], size: 4.8, color: 0xe8f3ff, label: 'HELIX CENTRAL STAR' },
     ],
     structure: {
       ringRadius: 31,
@@ -142,7 +440,89 @@ export const NEBULA_PROFILES_A = {
       centralStarScale: 4.4,
       starSeparationPx: 11,
     },
+    reconstruction: {
+      mode: 'registered-relief',
+      coordinateSpace: 'uv-top-left',
+      plateAspect: 0.9275,
+      exactHeadOn: true,
+      revealAngleDeg: [2, 15],
+      genericCloudOpacity: 0,
+      depthLayers: [
+        {
+          id: 'inner-disk-near', role: 'inner-ionized-disk', z: 4,
+          thickness: 3.4, opacity: 0.7, selection: 'blue-cyan-core',
+          region: [[0.22,0.20],[0.78,0.20],[0.78,0.78],[0.22,0.78]],
+        },
+        {
+          id: 'main-knot-ring', role: 'optically-thick-ionization-front', z: 1.2,
+          thickness: 5.6, opacity: 0.84, selection: 'yellow-orange-annulus',
+          region: [[0.12,0.10],[0.88,0.10],[0.88,0.90],[0.12,0.90]],
+        },
+        {
+          id: 'inclined-outer-torus', role: 'second-ejection-torus', z: -6,
+          thickness: 5.2, opacity: 0.54, selection: 'red-outer-ring',
+          region: [[0.05,0.03],[0.95,0.03],[0.95,0.96],[0.05,0.96]],
+        },
+        {
+          id: 'outermost-ism-shell', role: 'ambient-medium-interaction', z: -14,
+          thickness: 2.5, opacity: 0.25, selection: 'faint-red-arc',
+          region: [[0,0],[1,0],[1,1],[0,1]],
+        },
+      ],
+      features: [
+        {
+          id: 'inner-ionized-disk', kind: 'elliptical-shell', colorRole: 'inner',
+          centerUv: [0.505,0.49], radiiUv: [0.245,0.255], inclinationDeg: 23,
+          axisTiltDeg: -6, z: 0, wallThickness: 1.1, opacity: 0.56,
+          openAxis: true,
+        },
+        {
+          id: 'main-outer-torus', kind: 'shell-ring', colorRole: 'accent',
+          centerUv: [0.505,0.49], radiiUv: [0.315,0.335], innerRadiiUv: [0.245,0.26],
+          axisTiltDeg: 7, inclinationDeg: 53, z: -2.2, thickness: 7.5,
+          opacity: 0.74, edgeSharpness: 0.92, azimuthalBreakup: 0.26,
+        },
+        {
+          id: 'cometary-knot-forest', kind: 'knot-band', colorRole: 'dust',
+          centerUv: [0.505,0.49], radiusUv: [0.245,0.325], axisTiltDeg: -4,
+          count: 1500, headRadiusUv: [0.0009,0.0027], tailLengthUv: [0.009,0.038],
+          tailDirection: 'radial-outward', z: [1.4,7.8], depthSpread: 1.8,
+          opacity: 0.96, headColorRole: 'accent', tailColorRole: 'outer',
+        },
+        {
+          id: 'radial-knot-tails', kind: 'radial-filament-band', colorRole: 'outer',
+          centerUv: [0.505,0.49], radiusUv: [0.27,0.38], count: 220,
+          widthUv: [0.00035,0.0014], z: [-1,5], opacity: 0.62,
+          angularJitterDeg: 1.2,
+        },
+        {
+          id: 'outermost-collision-arc', kind: 'broken-shell-arcs', colorRole: 'outer',
+          centerUv: [0.505,0.49], radiusUv: [0.42,0.48], axisRatio: 1.06,
+          arcCount: 13, arcLengthDeg: [12,42], widthUv: [0.002,0.008],
+          z: [-16,-11], depthSpread: 1.8, opacity: 0.3, breakup: 0.54,
+          flattenSideDeg: -145, flattening: 0.17,
+        },
+        {
+          id: 'polar-low-density-plumes', kind: 'bipolar-filament-bundle',
+          colorRole: 'inner', centerUv: [0.505,0.49], axisDeg: -6,
+          count: 30, lengthUv: [0.15,0.31], widthUv: [0.0006,0.0024],
+          openingDeg: 24, z: [-18,18], opacity: 0.34, taper: 0.74,
+        },
+        {
+          id: 'thermal-ionization-rims', kind: 'concentric-rims',
+          centerUv: [0.505,0.49], radiiUv: [0.205,0.245,0.287,0.335],
+          colorRoles: ['inner','inner','accent','outer'], widthsUv: [0.009,0.008,0.012,0.016],
+          z: [0,1.2,2.4,3.5], opacity: [0.46,0.54,0.68,0.72],
+          edgeSharpness: 0.9,
+        },
+      ],
+    },
     source: 'https://arxiv.org/abs/astro-ph/0407556',
+    references: [
+      'https://arxiv.org/abs/astro-ph/0407556',
+      'https://science.nasa.gov/image-detail/idl-tiff-file-45/',
+      'https://science.nasa.gov/photojournal/the-infrared-helix/',
+    ],
     caveat: 'Two differently oriented structures and radial cometary knots are science-led; their relative depth, knot count, and faint outer shell are simplified.',
   },
 
@@ -156,6 +536,23 @@ export const NEBULA_PROFILES_A = {
       depthScale: 1.08,
       light: [0.18, 0.72, 0.66],
     },
+    matter: {
+      sampleWidth: 296,
+      gasTriangles: 12600,
+      dustTriangles: 4300,
+      saturation: 1.14,
+      gasThreshold: 0.06,
+      dustThreshold: 0.39,
+      gasOpacity: 0.54,
+      dustOpacity: 0.94,
+      edgeGain: 3.15,
+      edgeExponent: 1.64,
+      cloudSuppression: 0.96,
+      filamentBias: 0.88,
+      silhouetteBias: 0.98,
+      depthJitter: 0.038,
+      alphaCutoff: 0.034,
+    },
     palette: {
       inner: 0x6bc1ca,
       outer: 0xd05b71,
@@ -163,7 +560,7 @@ export const NEBULA_PROFILES_A = {
       dust: 0x10090e,
     },
     sources: [
-      { position: [8, -5, 1], size: 5.1, color: 0xd8efff, label: 'HERSCHEL 36' },
+      { position: [8, -5, 1], photoUv: [0.49, 0.49], size: 5.1, color: 0xd8efff, label: 'HERSCHEL 36' },
       { position: [-13, 8, -4], size: 3.4, color: 0xbfdcff, label: '9 SAGITTARII' },
       { position: [15, 10, -8], size: 3, color: 0xc9e4ff, label: 'HD 165052' },
     ],
@@ -178,7 +575,106 @@ export const NEBULA_PROFILES_A = {
       centralStars: 7,
       starSeparationPx: 12,
     },
+    reconstruction: {
+      mode: 'registered-relief',
+      coordinateSpace: 'uv-top-left',
+      plateAspect: 1.0183,
+      exactHeadOn: true,
+      revealAngleDeg: [2.5, 17],
+      genericCloudOpacity: 0,
+      illuminationDirectionUv: [0.2, -0.98],
+      depthLayers: [
+        {
+          id: 'foreground-dust-curtains', role: 'dense-natal-cloud', z: 7.2,
+          thickness: 5.5, opacity: 0.92, selection: 'dark-ridge',
+          region: [[0,0.02],[1,0.02],[1,0.82],[0,0.82]],
+        },
+        {
+          id: 'herschel36-cavity-wall', role: 'wind-cleared-hii-cavity', z: -1,
+          thickness: 4.2, opacity: 0.7, selection: 'pink-gold-emission',
+          region: [[0.18,0.18],[0.80,0.18],[0.88,0.78],[0.20,0.83]],
+        },
+        {
+          id: 'oxygen-back-wall', role: 'exposed-hot-gas', z: -10,
+          thickness: 2.8, opacity: 0.52, selection: 'blue-cyan-emission',
+          region: [[0.28,0.22],[0.86,0.22],[0.86,0.70],[0.28,0.70]],
+        },
+        {
+          id: 'extended-hii-background', role: 'diffuse-ionized-field', z: -17,
+          thickness: 1.2, opacity: 0.28, selection: 'red-highpass-filaments',
+          region: [[0,0],[1,0],[1,1],[0,1]],
+        },
+      ],
+      features: [
+        {
+          id: 'herschel36-wind-cavity', kind: 'cavity-shell', colorRole: 'inner',
+          centerUv: [0.49,0.49], radiiUv: [0.22,0.19], axisTiltDeg: -22,
+          z: -2.2, depth: 18, wallThickness: 1.2, openingUv: [0.62,0.33],
+          opacity: 0.64, edgeSharpness: 0.9, breakup: 0.28,
+        },
+        {
+          id: 'compact-hourglass', kind: 'hourglass-shell', colorRole: 'accent',
+          centerUv: [0.48,0.48], axisDeg: -18, lobeLengthUv: 0.11,
+          waistWidthUv: 0.018, lobeWidthUv: 0.065, z: [0.5,5.2],
+          wallThickness: 0.55, opacity: 0.84, openingDeg: 52,
+        },
+        {
+          id: 'lagoon-main-dust-lane', kind: 'dust-ribbon', colorRole: 'dust',
+          path: [[0.02,0.10],[0.17,0.13],[0.31,0.18],[0.43,0.24],[0.57,0.24],[0.72,0.20],[0.91,0.24],[1.00,0.29]],
+          widthUv: [0.028,0.072], z: 8.4, thickness: 5.8, opacity: 0.98,
+          edgeFeatherUv: 0.0035, folds: 13,
+        },
+        {
+          id: 'southern-dust-ridge', kind: 'dust-ribbon', colorRole: 'dust',
+          path: [[0.19,0.54],[0.29,0.52],[0.40,0.57],[0.49,0.65],[0.58,0.77],[0.70,0.90]],
+          widthUv: [0.018,0.052], z: 6.5, thickness: 4.4, opacity: 0.94,
+          edgeFeatherUv: 0.004, folds: 9,
+        },
+        {
+          id: 'paired-interstellar-twisters', kind: 'helical-filament-pair',
+          colorRole: 'dust', originUv: [0.45,0.47], axisUv: [-0.25,-0.97],
+          lengthUv: 0.19, separationUv: 0.022, radiusUv: 0.008,
+          turns: [1.3,1.8], z: [3.5,7.2], widthUv: [0.002,0.005],
+          opacity: 0.92, taper: 0.58,
+        },
+        {
+          id: 'wind-pushed-curtains', kind: 'curtain-field', colorRole: 'outer',
+          paths: [
+            [[0.31,0.40],[0.27,0.52],[0.24,0.68],[0.22,0.83]],
+            [[0.55,0.38],[0.61,0.49],[0.68,0.62],[0.78,0.76]],
+            [[0.62,0.28],[0.73,0.33],[0.83,0.41],[0.92,0.55]],
+          ],
+          countPerPath: 12, widthUv: [0.0008,0.003], spreadUv: 0.018,
+          z: [-4,4], depthSpread: 1.5, opacity: 0.58, folds: 7,
+        },
+        {
+          id: 'elephant-trunk-field', kind: 'pillar-field', colorRole: 'dust',
+          region: [[0.26,0.34],[0.69,0.34],[0.79,0.78],[0.20,0.78]],
+          count: 23, lengthUv: [0.018,0.09], widthUv: [0.004,0.018],
+          facingUv: [0.18,-0.98], z: [3.2,8.5], depthSpread: 1.7,
+          opacity: 0.94, rimColorRole: 'accent', rimWidthUv: 0.0018,
+        },
+        {
+          id: 'bok-globules', kind: 'knot-field', colorRole: 'dust',
+          region: [[0.10,0.18],[0.90,0.18],[0.92,0.88],[0.08,0.88]],
+          count: 72, radiusUv: [0.0018,0.0075], z: [4.5,10],
+          depthSpread: 1.8, opacity: 0.96, edgeSharpness: 0.98,
+        },
+        {
+          id: 'cavity-ionization-rims', kind: 'broken-shell-arcs', colorRole: 'accent',
+          centerUv: [0.49,0.49], radiusUv: [0.18,0.27], axisRatio: 0.82,
+          arcCount: 15, arcLengthDeg: [10,38], widthUv: [0.0015,0.006],
+          z: [-5,2], depthSpread: 1.2, opacity: 0.64, breakup: 0.46,
+        },
+      ],
+    },
     source: 'https://science.nasa.gov/missions/hubble/giant-twisters-in-the-lagoon-nebula/',
+    references: [
+      'https://science.nasa.gov/missions/hubble/lagoon-nebula-visible-light-view/',
+      'https://science.nasa.gov/missions/hubble/giant-twisters-in-the-lagoon-nebula/',
+      'https://science.nasa.gov/asset/hubble/lagoon-nebula-visible-light-view-vs-infrared-view/',
+      'https://arxiv.org/abs/1705.08194',
+    ],
     caveat: 'The broad wind cavity, foreground dust lane, and local Hourglass blister are separated in depth for clarity; exact cloud distances are not known.',
   },
 };

@@ -8,7 +8,7 @@ import { mulberry, hashStr, gaussian } from '../utils/rng.js';
 import { dotTexture } from '../objects/starfield.js';
 import { loadTexture } from '../utils/assets.js';
 import { landmarkImageIR } from '../data/landmarkImagesIR.js';
-import { TEX_TIER, detectTier } from '../core/quality.js';
+import { TEX_TIER } from '../core/quality.js';
 
 const MODEL = 'models/pillars-of-creation.glb';
 const MODEL_LOW = 'models/pillars-of-creation-low.glb';
@@ -16,22 +16,19 @@ const MODEL_CREDIT = '3D model: Leah Hustak & Ralf Crawford (STScI)';
 const PHOTO_ASPECT = 6780 / 7071;
 const PHOTO_HEIGHT = 84;
 const PHOTO_WIDTH = PHOTO_HEIGHT * PHOTO_ASPECT;
-// Fidelity is the default even on automatically detected lower tiers. The
-// compact asset remains available through the explicit ?tier=low override.
-const EXPLICIT_LOW = TEX_TIER === 'low' && detectTier().forced === true;
-
-function softCloudTexture(){
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gradient.addColorStop(0, 'rgba(255,255,255,.88)');
-  gradient.addColorStop(0.32, 'rgba(255,255,255,.30)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(canvas);
-}
+// Automatic low-tier detection must select the compact model and budgets too;
+// a phone should not allocate the 120k-surfel desktop reconstruction merely
+// because its tier was detected rather than explicitly requested.
+const LOW_TIER = TEX_TIER === 'low';
+const DETAIL = Object.freeze(LOW_TIER ? {
+  erosionGrains: 1500,
+  rootGrains: 900,
+  outflowGrains: 260,
+} : {
+  erosionGrains: 7200,
+  rootGrains: 4200,
+  outflowGrains: 1100,
+});
 
 function placeholderTexture(color){
   const c = new THREE.Color(color);
@@ -83,13 +80,14 @@ function buildSurfelMaterial(uniforms){
       uOrbit: uniforms.uOrbit,
       uBoundsMin: uniforms.uBoundsMin,
       uBoundsMax: uniforms.uBoundsMax,
-      uPointSize: { value: EXPLICIT_LOW ? 2.9 : 2.55 },
+      uPointSize: { value: LOW_TIER ? 2.9 : 2.55 },
     },
     transparent: true,
     depthWrite: false,
     depthTest: true,
     blending: THREE.NormalBlending,
     vertexShader: `
+      attribute float aScale;
       uniform float uPointSize;
       varying vec3 vObjectPos;
       varying vec3 vObjectNormal;
@@ -104,16 +102,18 @@ function buildSurfelMaterial(uniforms){
       void main(){
         vObjectPos = position;
         vObjectNormal = normalize(normal);
-        vGrain = hash31(position * 2.73);
+        float coarse = hash31(position * .47);
+        float fine = hash31(position * 3.81 + normal * 7.2);
+        vGrain = coarse * .58 + fine * .42;
         // A tiny normal offset makes the point shell breathe beyond the hard
         // STL surface without changing the authoritative silhouette.
-        vec3 displaced = position + normal * (vGrain - .5) * .34;
+        vec3 displaced = position + normal * ((coarse - .5) * .52 + (fine - .5) * .16);
         vec4 world = modelMatrix * vec4(displaced, 1.0);
         vWorldNormal = normalize(mat3(modelMatrix) * normal);
         vViewDir = normalize(cameraPosition - world.xyz);
         vec4 mv = viewMatrix * world;
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = uPointSize * clamp(92.0 / max(34.0, -mv.z), .72, 2.1);
+        gl_PointSize = uPointSize * aScale * clamp(92.0 / max(34.0, -mv.z), .72, 2.1);
       }`,
     fragmentShader: `
       uniform sampler2D uVisible;
@@ -155,11 +155,14 @@ function buildSurfelMaterial(uniforms){
         vec3 sideI = mix(vec3(.024,.008,.035), vec3(.32,.052,.030), vGrain);
         vec3 side = mix(sideV, sideI, uMix);
         vec3 color = mix(side, photo, photoFace * signal * .88);
+        // Multiplicative grains break the printable surface into dense knots,
+        // translucent skins and cavities at more than one spatial scale.
+        color *= .70 + vGrain * .54;
         vec3 rimV = mix(vec3(.08,.72,.76), vec3(1.0,.53,.16), signal);
         vec3 rimI = mix(vec3(.27,.26,.90), vec3(1.0,.31,.09), signal);
         color += mix(rimV, rimI, uMix) * rim * (.22 + signal * .33);
 
-        float grainAlpha = .24 + vGrain * .42;
+        float grainAlpha = .16 + pow(vGrain, .72) * .54;
         float alpha = uOrbit * soft * grainAlpha * (.44 + signal * .28 + rim * .22);
         gl_FragColor = vec4(color, alpha);
       }`,
@@ -170,10 +173,11 @@ function buildSurfelMaterial(uniforms){
 function makeSurfelGeometry(source){
   const pos = source.attributes.position;
   const normal = source.attributes.normal;
-  const cap = EXPLICIT_LOW ? 24000 : 120000;
+  const cap = LOW_TIER ? 24000 : 120000;
   const count = Math.min(pos.count, cap);
   const positions = new Float32Array(count * 3);
   const normals = new Float32Array(count * 3);
+  const scales = new Float32Array(count);
   const stride = pos.count / count;
   for (let i = 0; i < count; i++){
     const sourceIndex = Math.min(pos.count - 1, Math.floor((i + .37) * stride));
@@ -185,10 +189,14 @@ function makeSurfelGeometry(source){
       normals[i*3+1] = normal.getY(sourceIndex);
       normals[i*3+2] = normal.getZ(sourceIndex);
     }
+    const x = positions[i*3], y = positions[i*3+1], z = positions[i*3+2];
+    const grain = Math.abs(Math.sin(x*12.9898 + y*78.233 + z*37.719) * 43758.5453) % 1;
+    scales[i] = .56 + Math.pow(grain, 1.8) * 1.48;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
   geometry.computeBoundingSphere();
   return geometry;
 }
@@ -320,32 +328,211 @@ function buildNebulaVeils(group, uniforms){
   return materials;
 }
 
-function buildAtmosphere(group, rnd, cloudMap){
-  const clouds = [];
-  const count = EXPLICIT_LOW ? 18 : 38;
-  const visiblePalette = [0x174f60, 0x267985, 0x75402f, 0xa85b3f];
-  const infraredPalette = [0x183862, 0x37336d, 0x6f2b2f, 0xa5442e];
-  for (let i = 0; i < count; i++){
-    const visible = new THREE.Color(visiblePalette[i % visiblePalette.length]);
-    const infrared = new THREE.Color(infraredPalette[i % infraredPalette.length]);
-    const material = new THREE.SpriteMaterial({
-      map: cloudMap,
-      color: visible,
-      transparent: true,
-      opacity: 0.018 + rnd() * 0.046,
-      blending: THREE.NormalBlending,
-      depthWrite: false,
-    });
-    const sprite = new THREE.Sprite(material);
-    const scale = 18 + rnd() * 30;
-    // A coherent, receding curtain unifies the four structures.  Random round
-    // foreground puffs were the main source of the floating-clump reading.
-    sprite.scale.set(scale, scale * (0.28 + rnd() * 0.34), 1);
-    sprite.position.set(gaussian(rnd) * 22, gaussian(rnd) * 24 + 2, -18 - rnd() * 34);
-    group.add(sprite);
-    clouds.push({ material, visible, infrared, opacity: material.opacity });
+/* The printable positioning sculpt gives the large silhouette. These grains
+   add the smaller-scale illuminated skin described in the observation: dense
+   molecular knots sit just behind a warm/cyan photoevaporation front, while a
+   connected dusty bed keeps the columns rooted in one cloud wall. The layer
+   is orbit-only so it never compromises registration with the source image. */
+function buildPhotoevaporativeSkin(group, rnd, uniforms){
+  const caps = [
+    { x: -14, y: 34, z:  4, radius: 7.6, depth: 8.4, lean: -.22 },
+    { x:  -5, y: 17, z: -5, radius: 6.0, depth: 7.0, lean:  .18 },
+    { x:   7, y: 12, z:  5, radius: 5.2, depth: 6.6, lean: -.15 },
+    { x:  15, y:  1, z: -7, radius: 4.2, depth: 5.2, lean:  .22 },
+  ];
+  const count = DETAIL.erosionGrains + DETAIL.rootGrains;
+  const positions = new Float32Array(count * 3);
+  const colorsVisible = new Float32Array(count * 3);
+  const colorsInfrared = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
+  const opacities = new Float32Array(count);
+  const flows = new Float32Array(count * 3);
+  const phases = new Float32Array(count);
+  const dustVisible = [new THREE.Color(0x33151a), new THREE.Color(0x71301f), new THREE.Color(0xa85d36)];
+  const edgeVisible = [new THREE.Color(0x43a8ad), new THREE.Color(0x78d6cf), new THREE.Color(0xe48c55)];
+  const dustInfrared = [new THREE.Color(0x281238), new THREE.Color(0x74304f), new THREE.Color(0xb6402b)];
+  const edgeInfrared = [new THREE.Color(0x4658ad), new THREE.Color(0xc14456), new THREE.Color(0xf06a32)];
+
+  for (let i = 0; i < DETAIL.erosionGrains; i++){
+    const cap = caps[i % caps.length];
+    const down = Math.pow(rnd(), 1.72) * (12 + cap.radius * 1.5);
+    const angle = rnd() * Math.PI * 2;
+    const shell = .58 + Math.pow(rnd(), .46) * .48;
+    const radius = cap.radius * (.34 + .66 * Math.pow(Math.min(1, down / 13), .45)) * shell;
+    const vapor = rnd() < .24 ? Math.pow(rnd(), 1.7) * (4 + cap.radius) : 0;
+    const q = i * 3;
+    positions[q] = cap.x + Math.cos(angle) * radius + down * cap.lean + vapor * -.34;
+    positions[q+1] = cap.y - down + vapor * .82;
+    positions[q+2] = cap.z + Math.sin(angle) * radius * (cap.depth / cap.radius) + vapor * .16;
+    const lit = THREE.MathUtils.clamp(Math.sin(angle) * .34 + vapor * .13 + .48, 0, 1);
+    const visible = (lit > .46 ? edgeVisible : dustVisible)[i % 3].clone();
+    const infrared = (lit > .42 ? edgeInfrared : dustInfrared)[(i+1) % 3].clone();
+    const grain = .52 + rnd() * .58;
+    colorsVisible.set([visible.r*grain, visible.g*grain, visible.b*grain], q);
+    colorsInfrared.set([infrared.r*grain, infrared.g*grain, infrared.b*grain], q);
+    sizes[i] = vapor ? .42 + rnd() * .68 : .72 + Math.pow(rnd(), 2) * 2.5;
+    opacities[i] = vapor ? .14 + rnd() * .20 : .20 + rnd() * .34;
+    flows[q] = -.16 - rnd() * .20;
+    flows[q+1] = .28 + rnd() * .50;
+    flows[q+2] = (rnd() - .5) * .22;
+    phases[i] = rnd() * Math.PI * 2;
   }
-  return clouds;
+
+  for (let i = 0; i < DETAIL.rootGrains; i++){
+    const n = DETAIL.erosionGrains + i;
+    const q = n * 3;
+    const x = (rnd() - .5) * 64;
+    const ridge = -36 + Math.sin(x * .13) * 2.2 + Math.sin(x * .41) * .7;
+    positions[q] = x + gaussian(rnd) * 1.2;
+    positions[q+1] = ridge + gaussian(rnd) * (1.8 + rnd() * 3.3);
+    positions[q+2] = gaussian(rnd) * 13 - 5;
+    const lit = rnd();
+    const visible = (lit > .72 ? edgeVisible : dustVisible)[i % 3];
+    const infrared = (lit > .72 ? edgeInfrared : dustInfrared)[(i+2) % 3];
+    const grain = .42 + rnd() * .52;
+    colorsVisible.set([visible.r*grain, visible.g*grain, visible.b*grain], q);
+    colorsInfrared.set([infrared.r*grain, infrared.g*grain, infrared.b*grain], q);
+    sizes[n] = .8 + Math.pow(rnd(), 2.4) * 3.8;
+    opacities[n] = .22 + rnd() * .36;
+    flows[q] = -.05; flows[q+1] = .08 + rnd() * .15; flows[q+2] = 0;
+    phases[n] = rnd() * Math.PI * 2;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('aColorVisible', new THREE.BufferAttribute(colorsVisible, 3));
+  geometry.setAttribute('aColorInfrared', new THREE.BufferAttribute(colorsInfrared, 3));
+  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute('aOpacity', new THREE.BufferAttribute(opacities, 1));
+  geometry.setAttribute('aFlow', new THREE.BufferAttribute(flows, 3));
+  geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+  geometry.computeBoundingSphere();
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uMix: uniforms.uMix, uOrbit: uniforms.uOrbit, uTime: { value: 0 } },
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.NormalBlending,
+    vertexShader: `
+      attribute vec3 aColorVisible;
+      attribute vec3 aColorInfrared;
+      attribute vec3 aFlow;
+      attribute float aSize;
+      attribute float aOpacity;
+      attribute float aPhase;
+      uniform float uMix;
+      uniform float uOrbit;
+      uniform float uTime;
+      varying vec3 vColor;
+      varying float vOpacity;
+      void main(){
+        float breathe = sin(uTime*.16 + aPhase)*.24;
+        vec3 p = position + aFlow*breathe*uOrbit;
+        vec4 mv = modelViewMatrix*vec4(p, 1.0);
+        gl_Position = projectionMatrix*mv;
+        gl_PointSize = aSize*clamp(96.0/max(35.0, -mv.z), .72, 2.15);
+        vColor = mix(aColorVisible, aColorInfrared, uMix);
+        vOpacity = aOpacity*uOrbit;
+      }`,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vOpacity;
+      void main(){
+        vec2 p = gl_PointCoord*2.0-1.0;
+        float r2 = dot(p,p);
+        if (r2 > 1.0) discard;
+        float core = pow(max(0.0, 1.0-r2), 1.32);
+        gl_FragColor = vec4(vColor*(.72+core*.42), vOpacity*core);
+      }`,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.name = 'multi-scale-photoevaporative-skin';
+  points.renderOrder = 2;
+  points.visible = false;
+  group.add(points);
+  return { points, material };
+}
+
+/* Webb/Hubble visualizations identify a diagonal newborn-star jet near the
+   tallest pillar. A small family of dusty bipolar knot streams makes that
+   process readable in orbit without pretending to locate unseen sources in
+   the flat photograph. */
+function buildProtostellarOutflows(group, rnd, uniforms){
+  const jets = [
+    { origin: new THREE.Vector3(-14, 25, 5), direction: new THREE.Vector3(-.74, .56, .36), length: 19, strength: 1 },
+    { origin: new THREE.Vector3(-4, 11, -4), direction: new THREE.Vector3(.48, .76, -.43), length: 10, strength: .48 },
+    { origin: new THREE.Vector3(8, 7, 5), direction: new THREE.Vector3(-.34, .79, .51), length: 8, strength: .36 },
+  ];
+  for (const jet of jets) jet.direction.normalize();
+  const count = DETAIL.outflowGrains;
+  const positions = new Float32Array(count*3);
+  const colors = new Float32Array(count*3);
+  const sizes = new Float32Array(count);
+  const phases = new Float32Array(count);
+  const blue = new THREE.Color(0x79d9ff), amber = new THREE.Color(0xffa75f);
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < count; i++){
+    const jet = jets[i % jets.length];
+    const signed = (rnd() < .5 ? -1 : 1) * Math.pow(rnd(), .68);
+    const along = signed * jet.length;
+    const tangent = new THREE.Vector3().crossVectors(jet.direction, up);
+    if (tangent.lengthSq() < .01) tangent.set(1, 0, 0);
+    tangent.normalize();
+    const bitangent = new THREE.Vector3().crossVectors(jet.direction, tangent).normalize();
+    const spread = (.14 + Math.abs(signed)*.72) * (1.2 - jet.strength*.35);
+    const p = jet.origin.clone().addScaledVector(jet.direction, along)
+      .addScaledVector(tangent, gaussian(rnd)*spread)
+      .addScaledVector(bitangent, gaussian(rnd)*spread);
+    positions.set([p.x, p.y, p.z], i*3);
+    const color = blue.clone().lerp(amber, .15 + rnd()*.48);
+    const brightness = (.42 + rnd()*.55)*jet.strength;
+    colors.set([color.r*brightness, color.g*brightness, color.b*brightness], i*3);
+    sizes[i] = .48 + (1-Math.abs(signed))*.72 + rnd()*.34;
+    phases[i] = rnd()*Math.PI*2;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uOrbit: uniforms.uOrbit, uMix: uniforms.uMix, uTime: { value: 0 } },
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending,
+    vertexColors: true,
+    vertexShader: `
+      attribute float aSize;
+      attribute float aPhase;
+      uniform float uOrbit;
+      uniform float uMix;
+      uniform float uTime;
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main(){
+        vColor = color*mix(.76, 1.14, uMix);
+        vAlpha = uOrbit*mix(.48, .88, uMix)*(.78+.22*sin(uTime*.55+aPhase));
+        vec4 mv = modelViewMatrix*vec4(position, 1.0);
+        gl_Position = projectionMatrix*mv;
+        gl_PointSize = aSize*clamp(96.0/max(34.0, -mv.z), .74, 2.2);
+      }`,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main(){
+        float r = length(gl_PointCoord*2.0-1.0);
+        if (r > 1.0) discard;
+        float core = pow(max(0.0, 1.0-r), 2.15);
+        gl_FragColor = vec4(vColor*(.62+core*.72), vAlpha*core);
+      }`,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.name = 'orbit-revealed-protostellar-outflows';
+  points.renderOrder = 5;
+  points.visible = false;
+  group.add(points);
+  return { points, material };
 }
 
 function buildWisps(group, rnd){
@@ -355,7 +542,7 @@ function buildWisps(group, rnd){
     { x:   7, z:  5, height: 49, bend: -2.2 },
     { x:  15, z: -7, height: 38, bend:  3.8 },
   ];
-  const count = EXPLICIT_LOW ? 900 : 4800;
+  const count = LOW_TIER ? 900 : 4800;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const origins = [];
@@ -390,6 +577,7 @@ function buildWisps(group, rnd){
     depthWrite: false,
   });
   const points = new THREE.Points(geometry, material);
+  points.visible = false;
   group.add(points);
   return { points, origins, anchors };
 }
@@ -436,7 +624,7 @@ function buildFilaments(group, rnd, uniforms){
     }
   }
 
-  const count = EXPLICIT_LOW ? 10 : 28;
+  const count = LOW_TIER ? 10 : 28;
   for (let f = 0; f < count; f++){
     const a = anchors[f % anchors.length];
     const phase = rnd() * Math.PI * 2;
@@ -458,7 +646,7 @@ function buildFilaments(group, rnd, uniforms){
 
   // Horizontal root wisps turn the four printer components into one eroding
   // molecular wall, which is how the telescope image reads compositionally.
-  for (let f = 0; f < (EXPLICIT_LOW ? 3 : 10); f++){
+  for (let f = 0; f < (LOW_TIER ? 3 : 10); f++){
     const points = [];
     const phase = rnd() * Math.PI * 2;
     const amplitude = 1.2 + rnd() * .35;
@@ -542,6 +730,7 @@ function buildFilaments(group, rnd, uniforms){
   const ribbons = new THREE.Mesh(geometry, material);
   ribbons.name = 'ionized-gas-ribbons';
   ribbons.renderOrder = 3;
+  ribbons.visible = false;
   group.add(ribbons);
   return { ribbons, material };
 }
@@ -623,7 +812,7 @@ function buildAlignedStars(group, image, infrared, uniforms, seed){
   }
   candidates.sort((a, b) => (b.contrast + b.light*.18) - (a.contrast + a.light*.18));
   const selected = [];
-  const limit = EXPLICIT_LOW ? (infrared ? 90 : 55) : (infrared ? 240 : 145);
+  const limit = LOW_TIER ? (infrared ? 90 : 55) : (infrared ? 240 : 145);
   for (const star of candidates){
     if (selected.some(other => {
       const dx = other.px - star.px, dy = other.py - star.py;
@@ -700,6 +889,7 @@ function buildAlignedStars(group, image, infrared, uniforms, seed){
   const stars = new THREE.Points(geometry, material);
   stars.name = infrared ? 'aligned-stars-infrared' : 'aligned-stars-visible';
   stars.renderOrder = 7;
+  stars.visible = false;
   group.add(stars);
   group.userData[infrared ? 'alignedStarsInfrared' : 'alignedStarsVisible'] = selected.length;
   return stars;
@@ -726,9 +916,10 @@ export function buildPillarsOfCreation(entry, visibleUrl){
   const rnd = mulberry(hashStr('pillars-hybrid:' + entry.id));
   const { material, uniforms } = buildMaterial();
   const surfelMaterial = buildSurfelMaterial(uniforms);
-  const atmosphere = buildAtmosphere(group, rnd, softCloudTexture());
   const projector = buildPhotoProjector(group, uniforms);
   buildNebulaVeils(group, uniforms);
+  const erosionSkin = buildPhotoevaporativeSkin(group, rnd, uniforms);
+  const outflows = buildProtostellarOutflows(group, rnd, uniforms);
   const wisps = buildWisps(group, rnd);
   const filaments = buildFilaments(group, rnd, uniforms);
   let modelRoot = null;
@@ -739,6 +930,12 @@ export function buildPillarsOfCreation(entry, visibleUrl){
   let fallbackAdded = false;
   let disposed = false;
   let detachedMaterialsDisposed = false;
+  group.userData.qualityBudget = { ...DETAIL, surfels: LOW_TIER ? 24000 : 120000 };
+  group.userData.scientificStructure = {
+    scaffold: 'STScI four-cloud positioning model supplies the authoritative large-scale silhouette.',
+    skin: 'Procedural orbit context: illuminated photoevaporation fronts and a connected molecular bed.',
+    outflows: 'The tallest-pillar diagonal stream references the observed newborn-star jet; smaller streams are contextual, not source astrometry.',
+  };
   const disposeDetachedMaterials = () => {
     if (detachedMaterialsDisposed) return;
     detachedMaterialsDisposed = true;
@@ -763,7 +960,7 @@ export function buildPillarsOfCreation(entry, visibleUrl){
 
   import('three/addons/loaders/GLTFLoader.js').then(({ GLTFLoader }) => {
     const loader = new GLTFLoader();
-    loader.load(EXPLICIT_LOW ? MODEL_LOW : MODEL, gltf => {
+    loader.load(LOW_TIER ? MODEL_LOW : MODEL, gltf => {
       modelRoot = gltf.scene;
       modelRoot.traverse(object => {
         if (!object.isMesh) return;
@@ -837,21 +1034,19 @@ export function buildPillarsOfCreation(entry, visibleUrl){
         mix += Math.sign(targetMix - mix) * step;
         uniforms.uMix.value = mix;
       }
-      for (const cloud of atmosphere){
-        cloud.material.color.copy(cloud.visible).lerp(cloud.infrared, mix);
-        cloud.material.opacity = cloud.opacity * (1 + mix * .34);
-      }
       filaments.material.uniforms.uTime.value = time;
+      erosionSkin.material.uniforms.uTime.value = time;
+      outflows.material.uniforms.uTime.value = time;
       if (camera){
         const length = Math.max(camera.position.length(), .001);
         const front = camera.position.z / length;
         // Morph over a broad arc.  A normal drag should reveal parallax inside
         // the photograph, not abruptly hard-cut to an archaeological scan.
-        const angleBlend = THREE.MathUtils.smoothstep(front, .45, .97);
-        const frontHemisphere = THREE.MathUtils.smoothstep(front, -.08, .38);
+        const angleBlend = THREE.MathUtils.smoothstep(front, .56, .985);
+        const frontHemisphere = THREE.MathUtils.smoothstep(front, -.10, .34);
         // A trace of the observation remains as a receding ionized-gas veil;
         // it disappears edge-on and never appears from behind.
-        const targetOpacity = angleBlend * .94 + frontHemisphere * .04;
+        const targetOpacity = angleBlend * .97 + frontHemisphere * .03;
         projector.opacity.value += (targetOpacity - projector.opacity.value) *
           Math.min(1, dt * 5.5);
         const orbitTarget = 1 - angleBlend;
@@ -861,6 +1056,16 @@ export function buildPillarsOfCreation(entry, visibleUrl){
         uniforms.uVeil.value += (veilTarget - uniforms.uVeil.value) *
           Math.min(1, dt * 3.8);
       }
+
+      const orbit = uniforms.uOrbit.value;
+      wisps.points.material.opacity = .50 * orbit;
+      wisps.points.visible = orbit > .004;
+      erosionSkin.points.visible = orbit > .004;
+      outflows.points.visible = orbit > .012;
+      filaments.ribbons.visible = orbit > .004;
+      if (visibleStars) visibleStars.visible = orbit > .004;
+      if (infraredStars) infraredStars.visible = orbit > .004;
+      if (modelRoot) modelRoot.visible = orbit > .004;
 
       const position = wisps.points.geometry.attributes.position;
       const array = position.array;

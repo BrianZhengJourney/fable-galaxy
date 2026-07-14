@@ -3,6 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import { heliocentric, julianDate } from '../js/data/ephemeris.js';
 import { generateSystem } from '../js/procgen/system.js';
@@ -404,8 +405,97 @@ test('the upgraded nebula collection has complete science-led 3D profiles', () =
     assert.ok(Array.isArray(profile.sources), id + ': sources must be an array');
     assert.match(profile.source, /^https:\/\//, id + ': invalid morphology source');
     assert.ok(profile.caveat.length > 40, id + ': missing uncertainty caveat');
+    const experience = landmarkExperience(LANDMARKS.find(entry => entry.id === id));
+    const observation = experience.moments.find(moment =>
+      moment.id === experience.defaultMoment);
+    assert.ok(Math.abs(observation.visual.phi-Math.PI/2) < 0.001,
+      id + ': archive observation must preserve the exact head-on plate');
   }
   assert.equal(nebulaProfile('pillars-of-creation'), null);
+});
+
+test('shared nebula runtime contains no generic soft-cloud renderer', async () => {
+  const [collection, matter] = await Promise.all([
+    readFile(new URL('../js/procgen/featured/nebulaCollection.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/nebulaMatter.js', import.meta.url), 'utf8'),
+  ]);
+  assert.doesNotMatch(collection, /buildVeils|photo-color-veil/);
+  assert.equal([...collection.matchAll(/new THREE\.Points\s*\(/g)].length, 1,
+    'shared nebula Points are limited to registered stellar sources');
+  assert.match(collection, /allowedPointRole = 'registered-stellar-sources'/);
+  assert.doesNotMatch(matter, /new THREE\.Points\s*\(|gl_PointCoord|makePointLayer/);
+  assert.doesNotMatch(matter, /photo-aligned-chromatic-gas|photo-aligned-foreground-dust/);
+  assert.match(matter, /new THREE\.(?:Mesh|InstancedMesh)\s*\(/,
+    'photo/depth reconstruction should use crisp surfaces');
+});
+
+test('dedicated and shared nebula sculpts contain no active wire or blob layers', async () => {
+  const [sculptA, sculptB, carina, crab, main] = await Promise.all([
+    readFile(new URL('../js/procgen/featured/nebulaSculptA.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/nebulaSculptB.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/carina.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/procgen/featured/crab.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/main.js', import.meta.url), 'utf8'),
+  ]);
+  for (const source of [sculptA, sculptB]){
+    assert.doesNotMatch(source,
+      /new THREE\.(?:Points|TubeGeometry|TorusGeometry)\s*\(|gl_PointCoord/);
+  }
+  assert.equal([...carina.matchAll(/new THREE\.Points\s*\(/g)].length, 1,
+    'Carina may retain only its registered colored stellar sources');
+  assert.match(carina, /allowedPointRole = 'registered-stellar-sources'/);
+  assert.doesNotMatch(carina,
+    /thin-ionization-ridges|holder\.add\(mesh,\s*surfels|new THREE\.(?:TubeGeometry|TorusGeometry)/);
+  assert.match(carina, /hubble-source-derived-relief-root/);
+  assert.match(carina, /alphaMap:\s*edgeMask/,
+    'Carina archive plates must feather their rectangular edges');
+  assert.match(carina, /eta\.uv\.material\.opacity\s*=\s*headOn/);
+  assert.match(carina, /hubble\.plate\.material\.opacity\s*=\s*headOn/);
+  assert.match(carina, /webb\.plate\.material\.opacity\s*=\s*headOn/);
+
+  assert.equal([...crab.matchAll(/new THREE\.Points\s*\(/g)].length, 3,
+    'Crab Points are limited to two aligned star sets and transient ejecta');
+  assert.equal([...crab.matchAll(/allowedPointRole\s*=/g)].length, 3);
+  assert.doesNotMatch(crab,
+    /registered-hubble-filament-surfels|registered-webb-cage-surfels|new THREE\.(?:TubeGeometry|TorusGeometry)/);
+  assert.match(crab, /smoothstep\(front,\s*\.9511,\s*\.9990\)/);
+  assert.match(crab, /smoothstep\(0\.0,\s*\.055,\s*vUv\.x\)/);
+  assert.match(main, /exitToGalaxy\(\)\{[\s\S]{0,1200}evictTextures\(\)/,
+    'leaving a landmark must evict its cached observation textures');
+});
+
+test('Pillars respects automatically detected low quality', async () => {
+  const source = await readFile(
+    new URL('../js/procgen/pillars.js', import.meta.url), 'utf8');
+  assert.match(source, /const LOW_TIER = TEX_TIER === 'low'/);
+  assert.doesNotMatch(source, /EXPLICIT_LOW|detectTier\(\)\.forced/);
+});
+
+test('every shared nebula disables generic blobs and defines crisp unique structure', () => {
+  const required = {
+    'orion-nebula': [['reconstruction', 'depthLayers'], ['reconstruction', 'features']],
+    'horsehead-nebula': [['reconstruction', 'depthLayers'], ['reconstruction', 'features']],
+    'ring-nebula': [['reconstruction', 'depthLayers'], ['reconstruction', 'features']],
+    'helix-nebula': [['reconstruction', 'depthLayers'], ['reconstruction', 'features']],
+    'lagoon-nebula': [['reconstruction', 'depthLayers'], ['reconstruction', 'features']],
+    'cats-eye-nebula': [['structure', 'innerBubbles'], ['structure', 'pointSymmetricArcs']],
+    'veil-nebula': [['structure', 'filamentBundles'], ['structure', 'speciesLayers']],
+    'rosette-nebula': [['structure', 'rimSectors'], ['structure', 'pillarAnchors']],
+    'trifid-nebula': [['structure', 'emissionLobes'], ['structure', 'dustLanes']],
+  };
+  for (const [id, paths] of Object.entries(required)){
+    const profile = nebulaProfile(id);
+    const recipe = profile.reconstruction;
+    assert.ok(recipe, id + ': missing reconstruction contract');
+    const blobsDisabled = recipe.genericSoftClouds === false ||
+      recipe.genericCloudOpacity === 0;
+    assert.ok(blobsDisabled, id + ': generic soft clouds must stay disabled');
+    for (const [parent, key] of paths){
+      const value = profile[parent]?.[key];
+      assert.ok(Array.isArray(value) && value.length >= 2,
+        `${id}: ${parent}.${key} needs object-specific geometry`);
+    }
+  }
 });
 
 test('the SN 1054 Crab alias opens the dedicated historical state', () => {

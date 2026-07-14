@@ -35,33 +35,33 @@ const STATES = Object.freeze({
 const PRESETS = Object.freeze({
   [STATES.SUPERNOVA]: {
     hubble: .05, webb: 0, epoch: 0, compare: 0, saturation: 1.04,
-    exposure: .58, surfels: .28, stars: .10, webbStars: 0, backtrace: .72,
-    filaments: .18, clouds: .82, flash: 1, engine: 0, model: 0,
+    exposure: .58, gasPatches: .28, stars: .10, webbStars: 0, backtrace: .72,
+    filaments: .18, flash: 1, engine: 0, model: 0,
   },
   [STATES.DISCOVERY]: {
     hubble: .92, webb: 0, epoch: 0, compare: 0, saturation: .76,
-    exposure: .52, surfels: .24, stars: .46, webbStars: 0, backtrace: 0,
-    filaments: .30, clouds: .46, flash: 0, engine: 0, model: 0,
+    exposure: .52, gasPatches: .24, stars: .46, webbStars: 0, backtrace: 0,
+    filaments: .30, flash: 0, engine: 0, model: 0,
   },
   [STATES.BACKTRACE]: {
     hubble: .96, webb: 0, epoch: 0, compare: 0, saturation: 1.02,
-    exposure: .86, surfels: .88, stars: .66, webbStars: 0, backtrace: .78,
-    filaments: .72, clouds: .62, flash: 0, engine: 0, model: 0,
+    exposure: .86, gasPatches: .88, stars: .66, webbStars: 0, backtrace: .78,
+    filaments: .72, flash: 0, engine: 0, model: 0,
   },
   [STATES.PULSAR]: {
     hubble: .24, webb: 0, epoch: .58, compare: 0, saturation: 1.08,
-    exposure: .70, surfels: .42, stars: .28, webbStars: 0, backtrace: 0,
-    filaments: .44, clouds: .48, flash: 0, engine: 1, model: 1,
+    exposure: .70, gasPatches: .42, stars: .28, webbStars: 0, backtrace: 0,
+    filaments: .44, flash: 0, engine: 1, model: 1,
   },
   [STATES.WEBB]: {
     hubble: 0, webb: 1, epoch: 1, compare: 0, saturation: 1.10,
-    exposure: 1.02, surfels: .70, stars: 0, webbStars: .82, backtrace: 0,
-    filaments: .86, clouds: .86, flash: 0, engine: .18, model: 0,
+    exposure: 1.02, gasPatches: .70, stars: 0, webbStars: .82, backtrace: 0,
+    filaments: .86, flash: 0, engine: .18, model: 0,
   },
   [STATES.EXPANSION]: {
     hubble: 1, webb: 0, epoch: .5, compare: 1, saturation: 1.08,
-    exposure: .98, surfels: .80, stars: .82, webbStars: 0, backtrace: 0,
-    filaments: .74, clouds: .64, flash: 0, engine: 0, model: 0,
+    exposure: .98, gasPatches: .80, stars: .82, webbStars: 0, backtrace: 0,
+    filaments: .74, flash: 0, engine: 0, model: 0,
   },
 });
 
@@ -156,7 +156,11 @@ function makeHubbleMaterial(texture1999, texture2024){
         vec3 color = mix(dissolved, registered, uCompare);
         float light = dot(color, vec3(.2126, .7152, .0722));
         color = mix(vec3(light), color, uSaturation) * uExposure;
-        gl_FragColor = vec4(color, uOpacity);
+        float edgeX = smoothstep(0.0, .055, vUv.x) *
+          smoothstep(0.0, .055, 1.0-vUv.x);
+        float edgeY = smoothstep(0.0, .055, vUv.y) *
+          smoothstep(0.0, .055, 1.0-vUv.y);
+        gl_FragColor = vec4(color, uOpacity*edgeX*edgeY);
       }`,
   });
 }
@@ -190,7 +194,12 @@ function makeWebbMaterial(texture){
         vec3 color = texture2D(uMap, vUv).rgb;
         float light = dot(color, vec3(.2126, .7152, .0722));
         color = mix(vec3(light), color, uSaturation) * uExposure;
-        gl_FragColor = vec4(color, uOpacity * mix(.24, 1.0, uReady));
+        float edgeX = smoothstep(0.0, .055, vUv.x) *
+          smoothstep(0.0, .055, 1.0-vUv.x);
+        float edgeY = smoothstep(0.0, .055, vUv.y) *
+          smoothstep(0.0, .055, 1.0-vUv.y);
+        gl_FragColor = vec4(color,
+          uOpacity * mix(.24, 1.0, uReady) * edgeX * edgeY);
       }`,
   });
 }
@@ -280,12 +289,26 @@ function starCandidates(imageA, imageB, width, height){
 
 function selectSeparated(candidates, limit, radiusSq){
   const selected = [];
+  const cellSize = Math.max(1,Math.sqrt(radiusSq));
+  const buckets = new Map();
   for (const candidate of candidates){
-    if (selected.some(other => {
-      const dx = candidate.x-other.x, dy = candidate.y-other.y;
-      return dx*dx+dy*dy < radiusSq;
-    })) continue;
+    const cellX = Math.floor(candidate.x/cellSize);
+    const cellY = Math.floor(candidate.y/cellSize);
+    let overlaps = false;
+    for (let dy = -1; dy <= 1 && !overlaps; dy++){
+      for (let dx = -1; dx <= 1 && !overlaps; dx++){
+        const nearby = buckets.get(`${cellX+dx}:${cellY+dy}`) || [];
+        overlaps = nearby.some(other => {
+          const x = candidate.x-other.x, y = candidate.y-other.y;
+          return x*x+y*y < radiusSq;
+        });
+      }
+    }
+    if (overlaps) continue;
     selected.push(candidate);
+    const key = `${cellX}:${cellY}`;
+    if (!buckets.has(key)) buckets.set(key,[]);
+    buckets.get(key).push(candidate);
     if (selected.length >= limit) break;
   }
   return selected;
@@ -353,7 +376,7 @@ function buildRegisteredStars(root, image1999, image2024, budget, uniforms, seed
         float side = smoothstep(uCurtain-.006, uCurtain+.006, aUvX);
         float epoch = mix(uEpoch, side, uCompare);
         vColor = mix(aColor1999, aColor2024, epoch);
-        vOpacity = uOpacity * mix(.14, 1.0, uOrbit);
+        vOpacity = uOpacity*uOrbit;
         vec3 p = position;
         p.z *= uOrbit;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
@@ -377,7 +400,9 @@ function buildRegisteredStars(root, image1999, image2024, budget, uniforms, seed
   });
   const stars = new THREE.Points(geometry, material);
   stars.name = 'registered-colored-hubble-stars';
+  stars.userData.allowedPointRole = 'registered-stellar-sources';
   stars.renderOrder = 8;
+  stars.visible = false;
   root.add(stars);
   return { stars, count: selected.length };
 }
@@ -424,7 +449,7 @@ function buildWebbStars(root, image, budget, uniforms, seed){
       varying float vOpacity;
       void main(){
         vColor = color;
-        vOpacity = uOpacity*mix(.14, 1.0, uOrbit);
+        vOpacity = uOpacity*uOrbit;
         vec3 p = position;
         p.z *= uOrbit;
         vec4 mv = modelViewMatrix*vec4(p, 1.0);
@@ -447,13 +472,192 @@ function buildWebbStars(root, image, budget, uniforms, seed){
   });
   const stars = new THREE.Points(geometry, material);
   stars.name = 'aligned-colored-webb-stars';
+  stars.userData.allowedPointRole = 'registered-stellar-sources';
   stars.renderOrder = 9;
+  stars.visible = false;
   root.add(stars);
   return { stars, count: selected.length };
 }
 
-function buildHubbleSurfels(root, image1999, image2024, budget, uniforms, seed){
-  const width = budget.surfelSample;
+/* Webb resolves a red-orange cage of dust/gas around a bluer synchrotron
+   interior. Sample those exact pixels, then give the two components different
+   ellipsoidal depths. The shader flattens both layers at the canonical camera,
+   so the Webb plate remains the sole head-on observation. */
+function buildWebbStructure(root, image, budget, uniforms, seed){
+  const width = budget.structureSample;
+  const height = Math.max(2, Math.round(width/WEBB_ASPECT));
+  const pixels = imagePixels(image, width, height);
+  const soft = imagePixels(image, width, height, 2.6);
+  const lum = luminancePixels(pixels);
+  const blur = luminancePixels(soft);
+  const rnd = mulberry(hashStr(seed));
+  const cageCandidates = [], synchrotronCandidates = [];
+
+  for (let y = 1; y < height-1; y++){
+    for (let x = 1; x < width-1; x++){
+      const q = y*width+x, offset = q*4;
+      const u = x/(width-1), v = y/(height-1);
+      const nx = (u-.5)*2/.96, ny = (.5-v)*2/.84;
+      const ellipse = nx*nx+ny*ny;
+      if (ellipse > 1.18 || lum[q] < .025) continue;
+      const red = pixels[offset]/255, green = pixels[offset+1]/255, blue = pixels[offset+2]/255;
+      const max = Math.max(red, green, blue), min = Math.min(red, green, blue);
+      const saturation = max > .001 ? (max-min)/max : 0;
+      const contrast = lum[q]-blur[q];
+      const edge = Math.abs(lum[q-1]-lum[q+1])+Math.abs(lum[q-width]-lum[q+width]);
+      if (lum[q] > .58 && contrast > .10 && saturation < .18) continue;
+
+      const warm = Math.max(0, red-blue*.68)+Math.max(0, green-blue*.92)*.42;
+      const cageScore = edge*1.55+saturation*.34+warm*.24+Math.sqrt(lum[q])*.12;
+      if (cageScore > .14)
+        cageCandidates.push({ x, y, u, v, ellipse, score: cageScore*(.86+rnd()*.28) });
+
+      const blueInterior = Math.max(0, blue-(red+green)*.38);
+      const synchScore = blueInterior*.78+lum[q]*.19+edge*.26;
+      if (ellipse < .88 && synchScore > .085)
+        synchrotronCandidates.push({ x, y, u, v, ellipse, score: synchScore*(.86+rnd()*.28) });
+    }
+  }
+  cageCandidates.sort((a, b) => b.score-a.score);
+  synchrotronCandidates.sort((a, b) => b.score-a.score);
+  // A separated selection produces readable broken surface patches instead of
+  // the circular particle carpet used by the earlier volume treatment.
+  const cageSelected = selectSeparated(
+    cageCandidates, budget.webbCagePatches, budget.patchSeparationSq);
+  const synchSelected = selectSeparated(
+    synchrotronCandidates, budget.webbSynchrotronPatches,
+    budget.patchSeparationSq*1.45);
+
+  function buildLayer(selected, shell, name){
+    const positions = [], colors = [], uvs = [], opacities = [], seeds = [];
+    const indices = [];
+    const cell = WEBB_WIDTH/width;
+    for (let i = 0; i < selected.length; i++){
+      const point = selected[i];
+      const depth = Math.sqrt(Math.max(0, 1-Math.min(1, point.ellipse)));
+      const centerX = (point.u-.5)*WEBB_WIDTH;
+      const centerY = (.5-point.v)*PHOTO_HEIGHT;
+      const hemisphere = rnd() < .5 ? -1 : 1;
+      const centerZ = shell
+        ? hemisphere*(3.2+depth*18)+Math.sin(centerX*.31+centerY*.19)*1.1
+        : Math.sin(centerX*.17-centerY*.23)*depth*5.5;
+      const patchWidth = cell*(shell
+        ? 1.75+Math.min(1.15, point.score*1.15)
+        : 2.55+Math.min(1.55, point.score*1.45));
+      const patchHeight = patchWidth*(.42+rnd()*.34);
+      const angle = shell
+        ? Math.atan2(centerY/PHOTO_HEIGHT, centerX/WEBB_WIDTH)+Math.PI*.5+
+          gaussian(rnd)*.23
+        : rnd()*Math.PI;
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      const offset = (point.y*width+point.x)*4;
+      const sampled = sampledColor(pixels, offset, shell ? 1.34 : 1.18);
+      if (!shell) sampled.lerp(new THREE.Color(0x557fff).convertSRGBToLinear(), .20);
+      const grain = .72+rnd()*.34;
+      const color = [sampled.r*grain, sampled.g*grain, sampled.b*grain];
+      const opacity = shell ? .18+rnd()*.16 : .12+rnd()*.12;
+      const patchSeed = rnd()*73;
+      const base = positions.length/3;
+      const corners = [
+        [-.58, -.40], [.52, -.49], [.60, .38], [-.46, .52],
+      ];
+      for (let j = 0; j < corners.length; j++){
+        const localX = corners[j][0]*patchWidth*(.88+rnd()*.22);
+        const localY = corners[j][1]*patchHeight*(.86+rnd()*.25);
+        const px = centerX+localX*cos-localY*sin;
+        const py = centerY+localX*sin+localY*cos;
+        const zFold = (localX/Math.max(.001, patchWidth))*
+          (shell ? hemisphere*1.1 : .65);
+        positions.push(px, py, centerZ+zFold);
+        colors.push(...color);
+        uvs.push(j === 0 || j === 3 ? 0 : 1, j < 2 ? 0 : 1);
+        opacities.push(opacity);
+        seeds.push(patchSeed);
+      }
+      indices.push(base, base+1, base+2);
+      if (rnd() > .22) indices.push(base, base+2, base+3);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(opacities, 1));
+    geometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uOrbit: uniforms.uOrbit,
+        uOpacity: uniforms.uWebbStructureOpacity,
+      },
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      blending: THREE.NormalBlending,
+      side: THREE.DoubleSide,
+      vertexColors: true,
+      vertexShader: `
+        attribute float aOpacity;
+        attribute float aSeed;
+        uniform float uOrbit;
+        uniform float uOpacity;
+        varying vec2 vUv;
+        varying vec3 vColor;
+        varying float vOpacity;
+        varying float vSeed;
+        void main(){
+          vUv = uv;
+          vColor = color;
+          vOpacity = uOpacity*uOrbit*aOpacity;
+          vSeed = aSeed;
+          vec3 p = position;
+          p.z *= uOrbit;
+          vec4 mv = modelViewMatrix*vec4(p, 1.0);
+          gl_Position = projectionMatrix*mv;
+        }`,
+      fragmentShader: `
+        varying vec2 vUv;
+        varying vec3 vColor;
+        varying float vOpacity;
+        varying float vSeed;
+        float hash12(vec2 p){
+          vec3 p3 = fract(vec3(p.xyx)*.1031);
+          p3 += dot(p3, p3.yzx+33.33);
+          return fract((p3.x+p3.y)*p3.z);
+        }
+        void main(){
+          float edge = min(min(vUv.x, 1.0-vUv.x),
+                           min(vUv.y, 1.0-vUv.y));
+          float edgeMask = smoothstep(.015, .14, edge);
+          float grain = hash12(floor(vUv*vec2(7.0, 5.0))+vSeed);
+          if (grain < .12 || edgeMask < .01) discard;
+          float alpha = vOpacity*edgeMask*(.78+grain*.22);
+          gl_FragColor = vec4(vColor*(.72+grain*.24), alpha);
+        }`,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = name;
+    mesh.renderOrder = shell ? 5 : 3;
+    mesh.visible = false;
+    root.add(mesh);
+    return mesh;
+  }
+
+  const cageMesh = buildLayer(
+    cageSelected, true, 'webb-aligned-dust-sulfur-patch-mesh');
+  const synchrotronMesh = buildLayer(
+    synchSelected, false, 'webb-aligned-synchrotron-patch-mesh');
+  return {
+    cageMesh,
+    synchrotronMesh,
+    cagePatchCount: cageSelected.length,
+    synchrotronPatchCount: synchSelected.length,
+  };
+}
+
+function buildHubblePatches(root, image1999, image2024, budget, uniforms, seed){
+  const width = budget.structureSample;
   const height = width;
   const pixels1999 = imagePixels(image1999, width, height);
   const pixels2024 = imagePixels(image2024, width, height);
@@ -480,41 +684,74 @@ function buildHubbleSurfels(root, image1999, image2024, budget, uniforms, seed){
     }
   }
   candidates.sort((a, b) => b.score-a.score);
-  const selected = candidates.slice(0, budget.surfels);
+  const selected = selectSeparated(
+    candidates, budget.hubbleGasPatches, budget.patchSeparationSq);
   if (!selected.length) return null;
 
-  const positions = new Float32Array(selected.length*3);
-  const colors1999 = new Float32Array(selected.length*3);
-  const colors2024 = new Float32Array(selected.length*3);
-  const sizes = new Float32Array(selected.length);
-  const uvx = new Float32Array(selected.length);
+  const positions = [], colors1999 = [], colors2024 = [];
+  const uvx = [], uvs = [], opacities = [], seeds = [], indices = [];
+  const cell = HUBBLE_WIDTH/width;
   for (let i = 0; i < selected.length; i++){
     const point = selected[i];
     const u = point.x/(width-1), v = point.y/(height-1);
     const nx = u*2-1, ny = (1-v)*2-1;
-    const radius = Math.min(1, Math.hypot(nx, ny));
-    positions[i*3] = (u-.5)*HUBBLE_WIDTH;
-    positions[i*3+1] = (.5-v)*PHOTO_HEIGHT;
-    positions[i*3+2] = gaussian(rnd)*(4+14*(1-radius*.58));
+    const ellipticalRadius = Math.min(1, Math.sqrt((nx/.94)**2 + (ny/.82)**2));
+    const shellDepth = Math.sqrt(Math.max(0, 1-ellipticalRadius*ellipticalRadius));
+    const centerX = (u-.5)*HUBBLE_WIDTH;
+    const centerY = (.5-v)*PHOTO_HEIGHT;
+    // Each sampled image feature becomes a torn tangent patch on the shell.
+    // uOrbit flattens that surface back into exact registered image coordinates.
+    const hemisphere = rnd() < .5 ? -1 : 1;
+    const centerZ = hemisphere*(3.5+shellDepth*17)+
+      Math.sin(centerX*.29-centerY*.21)*1.2;
+    const patchWidth = cell*(1.8+Math.min(1.45, point.score*1.25));
+    const patchHeight = patchWidth*(.40+rnd()*.34);
+    const angle = Math.atan2(centerY/PHOTO_HEIGHT, centerX/HUBBLE_WIDTH)+
+      Math.PI*.5+gaussian(rnd)*.22;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
     const offset = (point.y*width+point.x)*4;
     const a = sampledColor(pixels1999, offset, 1.22);
     const b = sampledColor(pixels2024, offset, 1.22);
-    colors1999.set([a.r, a.g, a.b], i*3);
-    colors2024.set([b.r, b.g, b.b], i*3);
-    sizes[i] = .72+Math.min(2.8, point.score*2.5)+rnd()*.45;
-    uvx[i] = u;
+    const opacity = .17+rnd()*.17;
+    const patchSeed = rnd()*79;
+    const base = positions.length/3;
+    const corners = [
+      [-.57, -.41], [.54, -.49], [.60, .38], [-.48, .53],
+    ];
+    for (let j = 0; j < corners.length; j++){
+      const localX = corners[j][0]*patchWidth*(.87+rnd()*.24);
+      const localY = corners[j][1]*patchHeight*(.85+rnd()*.27);
+      positions.push(
+        centerX+localX*cos-localY*sin,
+        centerY+localX*sin+localY*cos,
+        centerZ+hemisphere*localX/Math.max(.001, patchWidth)*1.15,
+      );
+      colors1999.push(a.r, a.g, a.b);
+      colors2024.push(b.r, b.g, b.b);
+      uvx.push(u);
+      uvs.push(j === 0 || j === 3 ? 0 : 1, j < 2 ? 0 : 1);
+      opacities.push(opacity);
+      seeds.push(patchSeed);
+    }
+    indices.push(base, base+1, base+2);
+    if (rnd() > .20) indices.push(base, base+2, base+3);
   }
 
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('aColor1999', new THREE.BufferAttribute(colors1999, 3));
-  geometry.setAttribute('aColor2024', new THREE.BufferAttribute(colors2024, 3));
-  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
-  geometry.setAttribute('aUvX', new THREE.BufferAttribute(uvx, 1));
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('aColor1999', new THREE.Float32BufferAttribute(colors1999, 3));
+  geometry.setAttribute('aColor2024', new THREE.Float32BufferAttribute(colors2024, 3));
+  geometry.setAttribute('aUvX', new THREE.Float32BufferAttribute(uvx, 1));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(opacities, 1));
+  geometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
   const material = new THREE.ShaderMaterial({
     uniforms: {
       uOrbit: uniforms.uOrbit,
-      uOpacity: uniforms.uSurfelOpacity,
+      uOpacity: uniforms.uHubblePatchOpacity,
       uEpoch: uniforms.uEpoch,
       uCompare: uniforms.uCompare,
       uCurtain: uniforms.uCurtain,
@@ -523,66 +760,89 @@ function buildHubbleSurfels(root, image1999, image2024, budget, uniforms, seed){
     transparent: true,
     depthWrite: false,
     depthTest: true,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.NormalBlending,
+    side: THREE.DoubleSide,
     vertexShader: `
       attribute vec3 aColor1999;
       attribute vec3 aColor2024;
-      attribute float aSize;
       attribute float aUvX;
+      attribute float aOpacity;
+      attribute float aSeed;
       uniform float uOrbit;
       uniform float uOpacity;
       uniform float uEpoch;
       uniform float uCompare;
       uniform float uCurtain;
       uniform float uBacktrace;
+      varying vec2 vUv;
       varying vec3 vColor;
       varying float vOpacity;
+      varying float vSeed;
       void main(){
         float side = smoothstep(uCurtain-.006, uCurtain+.006, aUvX);
         float epoch = mix(uEpoch, side, uCompare);
+        vUv = uv;
         vColor = mix(aColor1999, aColor2024, epoch);
-        vOpacity = uOpacity*mix(.16, 1.0, uOrbit);
+        vOpacity = uOpacity*uOrbit*aOpacity;
+        vSeed = aSeed;
         vec3 p = position;
         p.xy *= mix(1.0, .70, uBacktrace);
         p.z *= mix(uOrbit, uOrbit*.35, uBacktrace);
         vec4 mv = modelViewMatrix*vec4(p, 1.0);
         gl_Position = projectionMatrix*mv;
-        gl_PointSize = aSize*clamp(94.0/max(34.0, -mv.z), .74, 2.4);
       }`,
     fragmentShader: `
+      varying vec2 vUv;
       varying vec3 vColor;
       varying float vOpacity;
+      varying float vSeed;
+      float hash12(vec2 p){
+        vec3 p3 = fract(vec3(p.xyx)*.1031);
+        p3 += dot(p3, p3.yzx+33.33);
+        return fract((p3.x+p3.y)*p3.z);
+      }
       void main(){
-        float r = length(gl_PointCoord*2.0-1.0);
-        if (r > 1.0) discard;
-        float alpha = pow(max(0.0, 1.0-r), 1.7);
-        gl_FragColor = vec4(vColor*(.62+alpha*.55), vOpacity*alpha);
+        float edge = min(min(vUv.x, 1.0-vUv.x),
+                         min(vUv.y, 1.0-vUv.y));
+        float edgeMask = smoothstep(.015, .14, edge);
+        float grain = hash12(floor(vUv*vec2(8.0, 6.0))+vSeed);
+        if (grain < .13 || edgeMask < .01) discard;
+        float alpha = vOpacity*edgeMask*(.78+grain*.22);
+        gl_FragColor = vec4(vColor*(.74+grain*.22), alpha);
       }`,
   });
-  const points = new THREE.Points(geometry, material);
-  points.name = 'registered-hubble-filament-surfels';
-  points.renderOrder = 5;
-  root.add(points);
-  return { points, count: selected.length };
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = 'registered-hubble-filament-patch-mesh';
+  mesh.renderOrder = 5;
+  mesh.visible = false;
+  root.add(mesh);
+  return { mesh, patchCount: selected.length };
 }
 
-function buildFilamentRibbons(root, rnd, count, uniforms){
+function buildFilamentSheets(root, rnd, count, uniforms){
   const positions = [], colorsHubble = [], colorsWebb = [];
   const phases = [], opacities = [], uvs = [], indices = [];
-  const hubblePalette = [0x57cbd2, 0xf27782, 0xf4ad62, 0x9a74d8];
-  const webbPalette = [0x4c6df2, 0xdc3f87, 0xf05c32, 0xf3a448];
+  const hubblePalette = [0x6caeb0, 0xa95f68, 0xbb8259, 0x705985];
+  const webbPalette = [0x5266a6, 0x914e70, 0xa9533d, 0xb27948];
 
-  function appendStrip(points, width, colorHubble, colorWebb, phase, opacity, axis){
+  function appendStrip(points, width, colorHubble, colorWebb, phase, opacity){
     const base = positions.length/3;
     for (let j = 0; j < points.length; j++){
       const t = j/(points.length-1);
-      const taper = .16+.84*Math.pow(Math.sin(Math.PI*t), .46);
+      const taper = .10+.90*Math.pow(Math.sin(Math.PI*t), .52);
+      const point = points[j];
+      const before = points[Math.max(0, j-1)];
+      const after = points[Math.min(points.length-1, j+1)];
+      const tangent = after.clone().sub(before).normalize();
+      const radial = new THREE.Vector3(
+        point.x/40, point.y/34, point.z/24).normalize();
+      const across = radial.cross(tangent).normalize();
+      const tornWidth = width*taper*(.78+.22*Math.sin(t*31+phase));
       for (let side = -1; side <= 1; side += 2){
-        const point = points[j];
         positions.push(
-          point.x+(axis === 0 ? side*width*taper : 0),
-          point.y+(axis === 1 ? side*width*taper : 0),
-          point.z+(axis === 2 ? side*width*taper : 0),
+          point.x+across.x*side*tornWidth,
+          point.y+across.y*side*tornWidth,
+          point.z+across.z*side*tornWidth,
         );
         uvs.push(side < 0 ? 0 : 1, t);
         colorsHubble.push(colorHubble.r, colorHubble.g, colorHubble.b);
@@ -602,24 +862,29 @@ function buildFilamentRibbons(root, rnd, count, uniforms){
     const latitude = (rnd()-.5)*1.35;
     const phase = rnd()*Math.PI*2;
     const points = [];
-    const steps = 20;
-    const span = .42+rnd()*.72;
-    const verticalSpan = 13+rnd()*18;
+    const steps = 14;
+    const span = .30+rnd()*.50;
+    const verticalSpan = 8+rnd()*12;
     for (let j = 0; j < steps; j++){
       const t = j/(steps-1)-.5;
       const a = angle+t*span+Math.sin(t*8+phase)*.035;
       const swell = 1+Math.sin(t*Math.PI+phase)*.08;
+      const y = latitude*34+t*verticalSpan+Math.sin(t*9+phase)*1.4;
+      // Webb shows the outer cage bending inward at the equatorial waist.
+      // Apply that pinch to the filament paths while retaining corrugation.
+      const waist = .72+.28*Math.pow(Math.min(1, Math.abs(y)/38), .62);
       points.push(new THREE.Vector3(
-        Math.cos(a)*38*swell,
-        latitude*34+t*verticalSpan+Math.sin(t*9+phase)*1.4,
-        Math.sin(a)*22*swell+Math.cos(t*7+phase)*2.0,
+        Math.cos(a)*40*swell*waist,
+        y,
+        Math.sin(a)*24*swell*waist+Math.cos(t*7+phase)*1.55,
       ));
     }
     const hubble = new THREE.Color(hubblePalette[i%hubblePalette.length]);
     const webb = new THREE.Color(webbPalette[(i+1)%webbPalette.length]);
-    const width = .34+rnd()*.72;
-    appendStrip(points, width, hubble, webb, phase, .13+rnd()*.14, i%3);
-    appendStrip(points, width*.68, hubble, webb, phase+.8, .08+rnd()*.10, (i+1)%3);
+    const width = 1.15+rnd()*1.55;
+    // One broad sheet per physical path. The previous paired strips read as
+    // two neon rails and exaggerated the cage into spaghetti.
+    appendStrip(points, width, hubble, webb, phase, .055+rnd()*.065);
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -636,12 +901,13 @@ function buildFilamentRibbons(root, rnd, count, uniforms){
       uOpacity: uniforms.uFilamentOpacity,
       uWebb: uniforms.uWebbMix,
       uTime: uniforms.uTime,
+      uOrbit: uniforms.uOrbit,
     },
     transparent: true,
     depthWrite: false,
     depthTest: true,
     side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.NormalBlending,
     vertexShader: `
       attribute vec3 aColorHubble;
       attribute vec3 aColorWebb;
@@ -664,6 +930,7 @@ function buildFilamentRibbons(root, rnd, count, uniforms){
       uniform float uOpacity;
       uniform float uWebb;
       uniform float uTime;
+      uniform float uOrbit;
       varying vec2 vUv;
       varying vec3 vColorHubble;
       varying vec3 vColorWebb;
@@ -675,56 +942,24 @@ function buildFilamentRibbons(root, rnd, count, uniforms){
         return fract((p3.x+p3.y)*p3.z);
       }
       void main(){
-        float edge = pow(max(0.0, sin(vUv.x*3.14159265)), .72);
-        float ends = smoothstep(0.0, .075, vUv.y)*smoothstep(0.0, .075, 1.0-vUv.y);
-        float flow = .58+.42*sin(vUv.y*42.0-uTime*.22+vPhase);
-        float grain = hash12(floor(vUv*vec2(15.0, 72.0))+vPhase);
-        float torn = .18+.82*smoothstep(.24, .80, grain+flow*.25);
-        vec3 color = mix(vColorHubble, vColorWebb, uWebb)*(.64+flow*.58);
-        gl_FragColor = vec4(color, uOpacity*vOpacity*edge*ends*torn);
+        float edge = smoothstep(.015, .16, min(vUv.x, 1.0-vUv.x));
+        float ends = smoothstep(0.0, .10, vUv.y)*
+                     smoothstep(0.0, .10, 1.0-vUv.y);
+        float flow = .52+.48*sin(vUv.y*27.0-uTime*.10+vPhase);
+        float grain = hash12(floor(vUv*vec2(11.0, 38.0))+vPhase);
+        if (grain+flow*.16 < .28) discard;
+        float torn = smoothstep(.24, .74, grain+flow*.15);
+        vec3 color = mix(vColorHubble, vColorWebb, uWebb)*(.72+flow*.18);
+        gl_FragColor = vec4(
+          color, uOpacity*uOrbit*vOpacity*edge*ends*(.42+torn*.58));
       }`,
   });
-  const ribbons = new THREE.Mesh(geometry, material);
-  ribbons.name = 'colored-gas-filament-ribbons';
-  ribbons.renderOrder = 4;
-  root.add(ribbons);
-  return { ribbons, material };
-}
-
-function buildAtmosphere(root, rnd, count, texture){
-  const clouds = [];
-  const hubbleColors = [0x183b7b, 0x7d294f, 0xb65f36, 0x246977, 0x5b347b];
-  const webbColors = [0x243f9a, 0xa62174, 0xe34a2f, 0xec963c, 0x493284];
-  for (let i = 0; i < count; i++){
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      color: hubbleColors[i%hubbleColors.length],
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const sprite = new THREE.Sprite(material);
-    const radius = 13+Math.pow(rnd(), .62)*39;
-    const angle = rnd()*Math.PI*2;
-    sprite.position.set(
-      Math.cos(angle)*radius+(rnd()-.5)*10,
-      (rnd()-.5)*62,
-      Math.sin(angle)*25+(rnd()-.5)*16,
-    );
-    const size = 13+rnd()*27;
-    sprite.scale.set(size, size*(.58+rnd()*.62), 1);
-    material.rotation = rnd()*Math.PI;
-    clouds.push({
-      sprite,
-      material,
-      opacity: .018+rnd()*.038,
-      hubble: new THREE.Color(hubbleColors[i%hubbleColors.length]),
-      webb: new THREE.Color(webbColors[(i+2)%webbColors.length]),
-    });
-    root.add(sprite);
-  }
-  return clouds;
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = 'broad-torn-filament-sheets';
+  mesh.renderOrder = 4;
+  mesh.visible = false;
+  root.add(mesh);
+  return { mesh, material };
 }
 
 function buildSupernova(root, rnd, count, glowTexture){
@@ -757,6 +992,7 @@ function buildSupernova(root, rnd, count, glowTexture){
   });
   const shell = new THREE.Points(geometry, material);
   shell.name = 'illustrative-supernova-ejecta';
+  shell.userData.allowedPointRole = 'transient-supernova-ejecta';
   root.add(shell);
 
   const shockMaterial = new THREE.ShaderMaterial({
@@ -802,40 +1038,65 @@ function buildSupernova(root, rnd, count, glowTexture){
   return { shell, material, shock, shockMaterial, flash, flashMaterial };
 }
 
-function buildPulsarEngine(root, glowTexture){
+function buildPulsarEngine(root, glowTexture, low){
   const group = new THREE.Group();
   group.name = 'pulsar-engine-context';
   group.rotation.set(.42, -.28, .12);
   root.add(group);
   const materials = [];
 
-  function additiveMaterial(color, opacity){
+  function surfaceMaterial(color, opacity){
     const material = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
       opacity: 0,
       side: THREE.DoubleSide,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
     });
     material.userData.baseOpacity = opacity;
     materials.push(material);
     return material;
   }
 
-  const torusMaterial = additiveMaterial(0x5c8fff, .64);
-  const torus = new THREE.Mesh(new THREE.TorusGeometry(8.5, .34, 14, 128), torusMaterial);
+  const torusMaterial = surfaceMaterial(0x5c8fff, .085);
+  const torus = new THREE.Mesh(new THREE.RingGeometry(5.8, 10.2,
+    low ? 48 : 88,3), torusMaterial);
+  torus.name = 'broad-equatorial-pulsar-flow-surface';
   group.add(torus);
-  const outerMaterial = additiveMaterial(0x9a62eb, .30);
-  const outer = new THREE.Mesh(new THREE.TorusGeometry(13, .25, 12, 128), outerMaterial);
+  const outerMaterial = surfaceMaterial(0x9a62eb, .045);
+  const outer = new THREE.Mesh(new THREE.RingGeometry(10.8, 15.3,
+    low ? 48 : 88,2,Math.PI*.12,Math.PI*1.72), outerMaterial);
+  outer.name = 'broken-outer-pulsar-flow-surface';
   outer.scale.y = .72;
   group.add(outer);
 
-  const jetMaterial = additiveMaterial(0x54b9ff, .34);
+  // Hubble/Webb show nested ripple-like wisps moving away from the pulsar.
+  // Broad annular sectors carry them as surfaces, never tube outlines.
+  const wisps = [];
+  for (let i = 0; i < (low ? 3 : 6); i++){
+    const wispMaterial = surfaceMaterial(i%2 ? 0x78b7ff : 0x8b72e8,
+      .030+i*.004);
+    const arc = Math.PI*(1.02+(i%3)*.18);
+    const wisp = new THREE.Mesh(
+      new THREE.RingGeometry(4.1+i*1.34,5.0+i*1.34,
+        low ? 36 : 64,2,.18+i*.19,arc),
+      wispMaterial,
+    );
+    wisp.rotation.z = -.72+i*.52;
+    wisp.position.set((i%2 ? 1 : -1)*.42, (i-2.5)*.24, (i%3-1)*.30);
+    wisp.scale.y = .62+i*.025;
+    group.add(wisp);
+    wisps.push(wisp);
+  }
+
+  const jetMaterial = surfaceMaterial(0x54b9ff, .055);
   for (const direction of [-1, 1]){
-    const jet = new THREE.Mesh(new THREE.CylinderGeometry(.18, 1.25, 30, 24, 1, true), jetMaterial);
+    const jet = new THREE.Mesh(new THREE.ConeGeometry(2.35, 23,
+      low ? 12 : 18,1,true), jetMaterial);
+    jet.name = 'broad-pulsar-jet-outflow-surface';
     jet.rotation.x = Math.PI/2;
-    jet.position.z = direction*15;
+    jet.position.z = direction*11.5;
     if (direction < 0) jet.rotation.y = Math.PI;
     group.add(jet);
   }
@@ -856,12 +1117,12 @@ function buildPulsarEngine(root, glowTexture){
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
-  glowMaterial.userData.baseOpacity = .78;
+  glowMaterial.userData.baseOpacity = .28;
   materials.push(glowMaterial);
   const glow = new THREE.Sprite(glowMaterial);
   glow.scale.set(9, 9, 1);
   group.add(glow);
-  return { group, materials, core, torus, outer, glow };
+  return { group, materials, core, torus, outer, wisps, glow };
 }
 
 function disposeMaterial(material){
@@ -900,11 +1161,13 @@ export function buildCrabFeatured({ entry }){
   const tier = detectTier().tier;
   const low = tier === 'low';
   const budget = low
-    ? { sample: 190, surfelSample: 150, stars: 70, webbStars: 85,
-        surfels: 6200, filaments: 18, clouds: 24, ejecta: 900,
+    ? { sample: 190, structureSample: 150, stars: 70, webbStars: 85,
+        hubbleGasPatches: 720, filamentSheets: 8, webbCagePatches: 620,
+        webbSynchrotronPatches: 260, patchSeparationSq: 3.2, ejecta: 900,
         textureLongSide: 2048 }
-    : { sample: 310, surfelSample: 248, stars: 170, webbStars: 210,
-        surfels: 16800, filaments: 42, clouds: 52, ejecta: 2400,
+    : { sample: 310, structureSample: 248, stars: 170, webbStars: 210,
+        hubbleGasPatches: 1700, filamentSheets: 16, webbCagePatches: 1450,
+        webbSynchrotronPatches: 620, patchSeparationSq: 3.6, ejecta: 2400,
         textureLongSide: 4096 };
   const rnd = mulberry(hashStr('crab-dedicated:' + entry.id));
   let disposed = false;
@@ -949,17 +1212,18 @@ export function buildCrabFeatured({ entry }){
     uCurtain: hubbleMaterial.uniforms.uCurtain,
     uStarOpacity: { value: .82 },
     uWebbStarOpacity: { value: 0 },
-    uSurfelOpacity: { value: .80 },
+    uWebbStructureOpacity: { value: 0 },
+    uHubblePatchOpacity: { value: .80 },
     uBacktrace: { value: 0 },
     uFilamentOpacity: { value: .74 },
     uWebbMix: { value: 0 },
     uTime: { value: 0 },
   };
 
-  const clouds = buildAtmosphere(group, rnd, budget.clouds, glowTexture);
-  const filaments = buildFilamentRibbons(group, rnd, budget.filaments, sharedUniforms);
+  const filaments = buildFilamentSheets(
+    group, rnd, budget.filamentSheets, sharedUniforms);
   const supernova = buildSupernova(group, rnd, budget.ejecta, glowTexture);
-  const engine = buildPulsarEngine(group, glowTexture);
+  const engine = buildPulsarEngine(group, glowTexture, low);
   const modelAnchor = new THREE.Group();
   modelAnchor.name = 'official-xray-informed-model-anchor';
   group.add(modelAnchor);
@@ -968,14 +1232,19 @@ export function buildCrabFeatured({ entry }){
   let hubble2024Image = null;
   let hubbleLayersBuilt = false;
   let webbStarsBuilt = false;
+  let hubbleRegistered = null;
+  let hubblePatchMesh = null;
+  let webbStarLayer = null;
+  let webbStructure = null;
 
   const current = { ...PRESETS[activeState] };
   let target = { ...current };
 
-  group.userData.renderer = 'crab-observation-volume-v1';
+  group.userData.renderer = 'crab-observation-sculpt-v2';
   group.userData.activeState = activeState;
   group.userData.qualityTier = tier;
   group.userData.qualityBudget = { ...budget };
+  group.userData.filamentSheets = budget.filamentSheets;
   group.userData.modelStatus = 'idle';
   group.userData.assets = {
     hubble1999: HUBBLE_1999,
@@ -1008,6 +1277,13 @@ export function buildCrabFeatured({ entry }){
   };
   group.userData.pulsarAnimation =
     'Visual motion is deliberately slow; the physical ~30 Hz pulse is not flashed onscreen.';
+  group.userData.morphology = {
+    optical: 'Registered Hubble features unfold as separated torn patches on a corrugated ellipsoidal shell.',
+    infrared: 'Webb-derived dust/sulfur and synchrotron patches retain exact photo coordinates head-on.',
+    waist: 'Eight or sixteen broad filament sheets bend through the equatorial pinch without forming a wire cage.',
+    pulsar: 'Nested partial wisps, ringed equatorial flow and opposed jets follow the NASA X-ray context model.',
+    atmosphere: 'No generic soft cloud sprites; all persistent structure is image-derived or morphology-bound.',
+  };
 
   function noteAssetError(asset, error){
     const errors = group.userData.assetErrors || (group.userData.assetErrors = {});
@@ -1067,10 +1343,12 @@ export function buildCrabFeatured({ entry }){
     try{
       const registered = buildRegisteredStars(group, image1999, image2024,
         budget, sharedUniforms, 'crab-registered-stars:' + entry.id);
-      const surfels = buildHubbleSurfels(group, image1999, image2024,
-        budget, sharedUniforms, 'crab-hubble-surfels:' + entry.id);
+      const patches = buildHubblePatches(group, image1999, image2024,
+        budget, sharedUniforms, 'crab-hubble-patches:' + entry.id);
+      hubbleRegistered = registered && registered.stars;
+      hubblePatchMesh = patches && patches.mesh;
       group.userData.registeredHubbleStars = registered ? registered.count : 0;
-      group.userData.hubbleSurfels = surfels ? surfels.count : 0;
+      group.userData.hubbleGasPatches = patches ? patches.patchCount : 0;
       group.userData.hubbleRegistrationReady = true;
     }catch (error){
       group.userData.hubbleRegistrationReady = false;
@@ -1104,7 +1382,13 @@ export function buildCrabFeatured({ entry }){
       try{
         const stars = buildWebbStars(group, image, budget, sharedUniforms,
           'crab-webb-stars:' + entry.id);
+        webbStarLayer = stars && stars.stars;
+        webbStructure = buildWebbStructure(group, image, budget, sharedUniforms,
+          'crab-webb-structure:' + entry.id);
         group.userData.alignedWebbStars = stars ? stars.count : 0;
+        group.userData.webbCagePatches = webbStructure.cagePatchCount;
+        group.userData.webbSynchrotronPatches =
+          webbStructure.synchrotronPatchCount;
         group.userData.webbAlignmentReady = true;
       }catch (error){
         group.userData.webbAlignmentReady = false;
@@ -1201,7 +1485,7 @@ export function buildCrabFeatured({ entry }){
     group,
     focusDist: 105,
     startTheta: 0,
-    startPhi: 1.20,
+    startPhi: Math.PI/2,
     autoRotate: false,
     hasIR: true,
     isImage: true,
@@ -1227,9 +1511,11 @@ export function buildCrabFeatured({ entry }){
         const length = Math.max(camera.position.length(), .001);
         front = camera.position.z/length;
       }
-      const orbitTarget = 1-THREE.MathUtils.smoothstep(front, .45, .90);
+      const headOn = THREE.MathUtils.smoothstep(front, .9511, .9990);
+      const orbitTarget = 1-headOn;
       sharedUniforms.uOrbit.value = damp(sharedUniforms.uOrbit.value, orbitTarget, 4.5, dt);
-      const frontVisibility = THREE.MathUtils.smoothstep(front, -.18, .88);
+      const frontHemisphere = THREE.MathUtils.smoothstep(front, -.15, .32);
+      const observationVisibility = headOn*.97+frontHemisphere*.03;
       const curtain = .5+Math.sin(time*.20)*.24;
 
       sharedUniforms.uEpoch.value = current.epoch;
@@ -1237,23 +1523,19 @@ export function buildCrabFeatured({ entry }){
       sharedUniforms.uCurtain.value = curtain;
       sharedUniforms.uStarOpacity.value = current.stars;
       sharedUniforms.uWebbStarOpacity.value = current.webbStars;
-      sharedUniforms.uSurfelOpacity.value = current.surfels;
+      sharedUniforms.uWebbStructureOpacity.value = current.webb;
+      sharedUniforms.uHubblePatchOpacity.value = current.gasPatches;
       sharedUniforms.uBacktrace.value = current.backtrace;
       sharedUniforms.uFilamentOpacity.value = current.filaments;
       sharedUniforms.uWebbMix.value = current.webb;
       sharedUniforms.uTime.value = time;
 
-      hubbleMaterial.uniforms.uOpacity.value = current.hubble*(.10+.90*frontVisibility);
+      hubbleMaterial.uniforms.uOpacity.value = current.hubble*observationVisibility;
       hubbleMaterial.uniforms.uSaturation.value = current.saturation;
       hubbleMaterial.uniforms.uExposure.value = current.exposure;
-      webbMaterial.uniforms.uOpacity.value = current.webb*(.10+.90*frontVisibility);
+      webbMaterial.uniforms.uOpacity.value = current.webb*observationVisibility;
       webbMaterial.uniforms.uSaturation.value = current.saturation;
       webbMaterial.uniforms.uExposure.value = current.exposure;
-
-      for (const cloud of clouds){
-        cloud.material.color.copy(cloud.hubble).lerp(cloud.webb, current.webb);
-        cloud.material.opacity = cloud.opacity*current.clouds*(.66+sharedUniforms.uOrbit.value*.48);
-      }
 
       const flashPhase = (flashAge%7)/7;
       const flashRadius = 8+flashPhase*33;
@@ -1270,6 +1552,8 @@ export function buildCrabFeatured({ entry }){
         material.opacity = material.userData.baseOpacity*current.engine;
       engine.torus.rotation.z = time*.10;
       engine.outer.rotation.z = -time*.055;
+      for (let i = 0; i < engine.wisps.length; i++)
+        engine.wisps[i].rotation.z += dt*(i%2 ? -.018 : .022);
       engine.core.scale.setScalar(1+Math.sin(time*1.12)*.07);
       engine.glow.scale.setScalar(9*(1+Math.sin(time*.78)*.055));
 
@@ -1279,8 +1563,20 @@ export function buildCrabFeatured({ entry }){
       group.userData.hubbleCurtain = curtain;
       group.userData.headOnAlignment = sharedUniforms.uOrbit.value < .025;
       group.userData.modelVisible = !!modelRoot && modelAnchor.visible;
-      // Ribbons are mesh surfaces with torn emission, never wireframe lines.
-      filaments.ribbons.visible = current.filaments > .003;
+      // A small set of broad torn surfaces replaces paired neon line rails.
+      filaments.mesh.visible = current.filaments*sharedUniforms.uOrbit.value > .003;
+      if (hubbleRegistered)
+        hubbleRegistered.visible = current.stars*sharedUniforms.uOrbit.value > .003;
+      if (hubblePatchMesh)
+        hubblePatchMesh.visible =
+          current.gasPatches*sharedUniforms.uOrbit.value > .003;
+      if (webbStarLayer)
+        webbStarLayer.visible = current.webbStars*sharedUniforms.uOrbit.value > .003;
+      if (webbStructure){
+        const visible = current.webb*sharedUniforms.uOrbit.value > .004;
+        webbStructure.cageMesh.visible = visible;
+        webbStructure.synchrotronMesh.visible = visible;
+      }
     },
     dispose(){
       if (disposed) return;
