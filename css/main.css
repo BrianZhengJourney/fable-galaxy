@@ -16,6 +16,96 @@ body{ font-family:var(--sans); color:var(--text); }
 #stage{ position:fixed; inset:0; }
 canvas{ display:block; }
 
+/* ---- deep-sky observation -> 3D model presentation ----
+   The sourced image remains a flat, uncropped plate. The WebGL stage beneath
+   it is the model; the reveal never treats observation pixels as recovered
+   depth. HUD and story UI sit above this deliberately non-interactive layer. */
+#stage{
+  transform:translateX(0); transform-origin:center center;
+  transition:transform .9s cubic-bezier(.22,.7,.18,1);
+}
+#deepSkyPresentation{
+  --dsp-reveal-duration:4200ms;
+  --dsp-fade-duration:3024ms;
+  position:fixed; inset:0; z-index:7; overflow:hidden; pointer-events:none;
+  visibility:hidden; opacity:0;
+}
+#deepSkyPresentation[data-mode="observation"],
+#deepSkyPresentation[data-mode="revealing"],
+#deepSkyPresentation[data-mode="split"]{
+  visibility:visible; opacity:1;
+}
+.dsp-reveal{
+  position:absolute; inset:0; display:grid; place-items:center;
+  perspective:clamp(900px, 105vw, 1800px);
+}
+.dsp-observation-face{
+  position:relative; width:100%; height:100%; overflow:hidden; background:#000;
+  transform:translate3d(0,0,0) rotateY(0deg); transform-origin:100% 50%;
+  transform-style:preserve-3d; backface-visibility:hidden; opacity:1;
+  transition:
+    transform var(--dsp-reveal-duration) cubic-bezier(.58,.03,.22,1),
+    opacity var(--dsp-fade-duration) cubic-bezier(.45,0,.9,.45);
+  will-change:transform, opacity;
+}
+.dsp-observation-face img,
+.dsp-split-observation img{
+  display:block; width:100%; height:100%; object-fit:contain; object-position:center;
+  background:#000; opacity:1; filter:none; transform:none;
+}
+#deepSkyPresentation[data-mode="revealing"] .dsp-observation-face{
+  transform:translate3d(-5vw,0,-4vw) rotateY(-82deg) scale(.96);
+  opacity:0;
+}
+#deepSkyPresentation[data-mode="split"] .dsp-reveal,
+#deepSkyPresentation[data-mode="model"] .dsp-reveal{
+  visibility:hidden; opacity:0;
+}
+.dsp-split-observation{
+  position:absolute; top:0; right:0; bottom:0; width:50vw; display:flex;
+  flex-direction:column; justify-content:center; overflow:hidden; visibility:hidden;
+  opacity:0; background:#000; border-left:1px solid rgba(98,230,255,.22);
+  box-shadow:-30px 0 70px rgba(0,0,0,.56);
+}
+#deepSkyPresentation[data-mode="split"] .dsp-split-observation{
+  visibility:visible; opacity:1;
+}
+.dsp-split-frame{ flex:1 1 auto; min-height:0; display:grid; place-items:center; background:#000; }
+.dsp-caption{
+  position:absolute; right:18px; bottom:18px; max-width:min(62ch, calc(100% - 36px));
+  display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:baseline; gap:7px 11px;
+  padding:6px 8px; color:rgba(232,248,252,.58); background:rgba(0,0,0,.68);
+  font:7.5px/1.35 var(--mono); letter-spacing:.09em; text-align:right;
+  text-shadow:0 1px 4px #000;
+}
+.dsp-caption span:first-child{ color:rgba(98,230,255,.86); letter-spacing:.22em; }
+.dsp-sr-only{
+  position:absolute !important; width:1px !important; height:1px !important; padding:0 !important;
+  margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important;
+  white-space:nowrap !important; border:0 !important;
+}
+body.deep-sky-split #stage{ transform:translateX(-25vw); }
+
+@media (max-width: 780px){
+  .dsp-split-observation{ width:56vw; }
+  body.deep-sky-split #stage{ transform:translateX(-28vw); }
+  .dsp-caption{ right:10px; bottom:178px; max-width:calc(100% - 20px); font-size:6.5px; }
+  .dsp-observation-face .dsp-caption{ bottom:188px; }
+}
+
+@media (max-width: 560px){
+  .dsp-split-observation{ width:58vw; }
+  body.deep-sky-split #stage{ transform:translateX(-29vw); }
+  .dsp-caption span:last-child{ display:none; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  #stage, .dsp-observation-face{ transition:none !important; }
+  #deepSkyPresentation[data-mode="revealing"] .dsp-observation-face{
+    transform:none; opacity:0;
+  }
+}
+
 /* ---- cockpit dressing ---- */
 #vignette{
   position:fixed; inset:0; pointer-events:none; z-index:5;

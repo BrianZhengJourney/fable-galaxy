@@ -338,7 +338,7 @@ export class Hud {
   }
 
   /* ---- semantic milestone rail (not a linear simulation scrubber) ---- */
-  showStoryline(experience, onSelect){
+  showStoryline(experience, onSelect, { initialMomentId = null } = {}){
     this._storyExperience = experience;
     this._storySelect = onSelect;
     const views = $('storyViewModes');
@@ -353,12 +353,14 @@ export class Hud {
       button.dataset.moment = mode.momentId;
       button.textContent = mode.label;
       button.setAttribute('aria-pressed', 'false');
-      button.addEventListener('click', () => this.selectStoryMoment(mode.momentId));
+      button.addEventListener('click', () =>
+        this.selectStoryMoment(mode.momentId, true, { user: true }));
       views.appendChild(button);
     }
     const track = $('storyTrack');
     track.innerHTML = '';
-    for (const [index, moment] of experience.moments.entries()){
+    const storyMoments = experience.moments.filter(moment => !moment.presentationOnly);
+    for (const [index, moment] of storyMoments.entries()){
       const node = document.createElement('button');
       node.type = 'button'; node.className = 'story-node'; node.dataset.moment = moment.id;
       node.id = 'story-tab-' + index;
@@ -370,7 +372,8 @@ export class Hud {
       const dot = document.createElement('i');
       const label = document.createElement('span'); label.textContent = moment.date;
       node.appendChild(dot); node.appendChild(label);
-      node.addEventListener('click', () => this.selectStoryMoment(moment.id));
+      node.addEventListener('click', () =>
+        this.selectStoryMoment(moment.id, true, { user: true }));
       node.addEventListener('keydown', event => {
         const nodes = [...track.querySelectorAll('.story-node')];
         const current = nodes.indexOf(event.currentTarget);
@@ -381,7 +384,7 @@ export class Hud {
         else if (event.key === 'End') next = nodes.length - 1;
         else return;
         event.preventDefault();
-        this.selectStoryMoment(nodes[next].dataset.moment);
+        this.selectStoryMoment(nodes[next].dataset.moment, true, { user: true });
         nodes[next].focus();
       });
       track.appendChild(node);
@@ -391,18 +394,25 @@ export class Hud {
     const storyline = $('storyline');
     storyline.classList.add('show');
     setInteractive(storyline, true);
-    this.selectStoryMoment(experience.defaultMoment || experience.moments[0].id);
+    const initial = initialMomentId || experience.defaultMoment || experience.moments[0].id;
+    this.selectStoryMoment(initial, true, initialMomentId ? { intro: true } : {});
   }
-  selectStoryMoment(id, notify = true){
+  selectStoryMoment(id, notify = true, meta = {}){
     if (!this._storyExperience) return;
     const moment = this._storyExperience.moments.find(m => m.id === id)
       || this._storyExperience.moments[0];
-    const activeState = moment.visual && moment.visual.state;
+    const activeVisual = moment.visual || {};
+    const activePresentation = activeVisual.presentation;
+    const activeState = activeVisual.state;
     for (const button of document.querySelectorAll('#storyViewModes .story-view')){
       const viewMoment = this._storyExperience.moments.find(candidate =>
         candidate.id === button.dataset.moment);
-      const active = viewMoment && viewMoment.visual &&
-        viewMoment.visual.state === activeState;
+      const viewVisual = viewMoment && viewMoment.visual || {};
+      const active = activePresentation
+        ? viewVisual.presentation === activePresentation
+        : activeState != null
+          ? viewVisual.state === activeState
+          : button.dataset.moment === moment.id;
       button.classList.toggle('active', !!active);
       button.setAttribute('aria-pressed', String(!!active));
     }
@@ -424,8 +434,8 @@ export class Hud {
     if (activeNode){
       $('storyCopy').setAttribute('aria-labelledby', activeNode.id);
       this._scrollStoryNodeIntoView(activeNode);
-    }
-    if (notify && this._storySelect) this._storySelect(moment);
+    } else $('storyCopy').removeAttribute('aria-labelledby');
+    if (notify && this._storySelect) this._storySelect(moment, meta);
   }
   _scrollStoryNodeIntoView(node){
     if (this._storyScrollFrame) cancelAnimationFrame(this._storyScrollFrame);

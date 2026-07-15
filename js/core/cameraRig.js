@@ -24,7 +24,9 @@ export class CameraRig {
     this._desired = new THREE.Vector3();
   }
 
-  interact(now){ this.lastInteract = now; }
+  interact(now){ this.lastInteract = now; this.cancelFlight(); }
+
+  cancelFlight(){ this.flying = false; }
 
   drag(dx, dy){
     this.theta -= dx * 0.0055;

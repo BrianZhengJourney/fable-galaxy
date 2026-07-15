@@ -67,11 +67,11 @@ export class LandmarkView {
 
   get hasIR(){ return this.exhibit.hasIR === true; }
   setIR(on){ if (this.exhibit.setIR) this.exhibit.setIR(on); }
-  setMoment(moment){
+  setMoment(moment, delegateVisual = null){
     const visual = moment && (moment.visual || moment);
     if (!visual) return;
     this._activeMoment = moment;
-    if (this.exhibit.setMoment) this.exhibit.setMoment(visual);
+    if (this.exhibit.setMoment) this.exhibit.setMoment(delegateVisual || visual);
     else if (visual.wavelength) this.setIR(visual.wavelength === 'infrared');
   }
 
@@ -85,6 +85,8 @@ export class LandmarkView {
       this.exhibit.group.userData.persistentThreeDimensionalModel === true;
     const explicitObservation = visual.observation === true ||
       visual.state === 'observation' ||
+      visual.presentation === 'observation' ||
+      visual.presentation === 'split' ||
       this.exhibit.group.userData.observationVisible === true ||
       this.exhibit.group.userData.observationRequested === true ||
       this.exhibit.group.userData.activePresentation === 'model-plus-source-observation';
@@ -95,7 +97,8 @@ export class LandmarkView {
       /OBSERVATION|IMAGE|REGISTERED COMPARISON/.test(moment && moment.kind || '');
     const observation = explicitObservation || inferredObservation;
     if (observation && this.imageCredit){
-      if (persistentModel && this.modelCredit)
+      if (((persistentModel && visual.presentation !== 'observation') ||
+          visual.presentation === 'split') && this.modelCredit)
         return { label: 'OBSERVATION + MODEL', text: this.imageCredit + ' · ' + this.modelCredit };
       return { label: 'IMAGE', text: this.imageCredit };
     }

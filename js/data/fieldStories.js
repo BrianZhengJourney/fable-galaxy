@@ -6,6 +6,7 @@ import { NEBULA_PROFILE_IDS } from './nebulaProfiles.js';
 import { nebulaModelExperience } from './nebulaExperiences.js';
 import { supernovaExperience } from './supernovaExperiences.js';
 import { landmarkImage } from './landmarkImages.js';
+import { withObservationModelPresentation } from './observationModelPresentations.js';
 
 const MODELED_BLACK_HOLE_IDS = new Set([
   'cygnus-x-1',
@@ -861,15 +862,17 @@ export function landmarkExperience(entry){
   const curated = entry && LANDMARK_EXPERIENCES[alias || entry.id];
   if (curated){
     if (entry.id === 'crab-nebula-sn-1054')
-      return { ...curated, defaultMoment: 'crab-pulsar' };
+      return withObservationModelPresentation(entry,
+        { ...curated, defaultMoment: 'crab-pulsar' });
     if (entry.id === 'gw150914-first-gravitational-wave')
-      return { ...curated, defaultMoment: 'gw150914-model' };
-    return curated;
+      return withObservationModelPresentation(entry,
+        { ...curated, defaultMoment: 'gw150914-model' });
+    return withObservationModelPresentation(entry, curated);
   }
   const supernova = supernovaExperience(entry);
-  if (supernova) return supernova;
+  if (supernova) return withObservationModelPresentation(entry, supernova);
   const nebula = nebulaModelExperience(entry);
-  if (nebula) return nebula;
+  if (nebula) return withObservationModelPresentation(entry, nebula);
   const modeledBlackHole = !!entry && MODELED_BLACK_HOLE_IDS.has(entry.id);
   const deepSkyArchiveOnly = !!entry && !landmarkImage(entry.id) &&
     (entry.category === 'NEBULA' || entry.category === 'SUPERNOVA');

@@ -38,6 +38,12 @@ import {
   supernovaExperience,
 } from '../js/data/supernovaExperiences.js';
 import {
+  HIGH_FIDELITY_PRESENTATION_IDS,
+  OBSERVATION_MODEL_PRESENTATION_CONFIGS,
+  observationModelPresentationConfig,
+  withObservationModelPresentation,
+} from '../js/data/observationModelPresentations.js';
+import {
   keplerPositionAtEccentricAnomaly,
   S_STAR_ORBITS,
   solveKeplerEccentricAnomaly,
@@ -560,7 +566,7 @@ test('modeled black-hole field stories disclose scientific visualization', () =>
   }
 });
 
-test('the upgraded nebula collection opens on 3D models and preserves exact observations', async () => {
+test('the upgraded nebula collection keeps model semantic defaults and exact observations', async () => {
   const catalogIds = new Set(LANDMARKS.map(entry => entry.id));
   const expected = [
     'orion-nebula', 'horsehead-nebula', 'ring-nebula', 'helix-nebula',
@@ -615,32 +621,6 @@ test('the upgraded nebula collection opens on 3D models and preserves exact obse
       id + ': source observation must preserve the exact head-on plate');
   }
 
-  const horsehead = landmarkExperience(
-    LANDMARKS.find(entry => entry.id === 'horsehead-nebula'));
-  assert.deepEqual(horsehead.viewModes, [
-    {
-      id: 'model', label: '3D MODEL',
-      momentId: 'horsehead-nebula-model',
-    },
-    {
-      id: 'observation', label: 'OBSERVATION',
-      momentId: 'horsehead-nebula-observation',
-    },
-    {
-      id: 'split', label: 'SPLIT',
-      momentId: 'horsehead-nebula-split',
-    },
-  ], 'Horsehead must expose explicit view-mode controls without HUD hardcoding');
-  const horseheadSplit = horsehead.moments.find(moment =>
-    moment.id === 'horsehead-nebula-split');
-  assert.ok(horseheadSplit, 'Horsehead is missing its side-by-side source comparison');
-  assert.equal(horseheadSplit.kind, 'SIDE-BY-SIDE COMPARISON');
-  assert.equal(horseheadSplit.visual.state, 'split');
-  assert.equal(horseheadSplit.visual.observation, true);
-  assert.equal(horseheadSplit.source,
-    nebulaProfile('horsehead-nebula').observationSource);
-  assert.match(horseheadSplit.text, /flat and unaltered beside the off-axis reconstruction/);
-
   const rosette=landmarkExperience(
     LANDMARKS.find(entry=>entry.id === 'rosette-nebula'));
   assert.equal(rosette.moments[0].kind,'OBSERVATION',
@@ -652,6 +632,84 @@ test('the upgraded nebula collection opens on 3D models and preserves exact obse
   assert.match(registry,/FEATURED_NEBULA_PROFILE_IDS\.map\(id => \[id,/,
     'featured registry must consume the curated subset rather than all archive profiles');
   assert.equal(nebulaProfile('pillars-of-creation'), null);
+});
+
+test('all curated nebulae and remnants share one observation-to-model presentation contract', () => {
+  const deepSkyExploreIds = EXPLORE_SECTIONS
+    .filter(section => section.id === 'nebulae' || section.id === 'remnants')
+    .flatMap(section => section.items.map(item => item.id));
+  assert.deepEqual([...HIGH_FIDELITY_PRESENTATION_IDS], deepSkyExploreIds,
+    'the opt-in presentation list must exactly match Explore nebulae and remnants');
+  assert.equal(HIGH_FIDELITY_PRESENTATION_IDS.length, 13);
+  assert.equal(new Set(HIGH_FIDELITY_PRESENTATION_IDS).size, 13);
+  assert.deepEqual(Object.keys(OBSERVATION_MODEL_PRESENTATION_CONFIGS).sort(),
+    [...HIGH_FIDELITY_PRESENTATION_IDS, 'crab-nebula'].sort(),
+    'the direct Crab route may alias the curated remnant without expanding Explore');
+
+  const catalog = new Map(LANDMARKS.map(entry => [entry.id, entry]));
+  for (const id of HIGH_FIDELITY_PRESENTATION_IDS){
+    const config = observationModelPresentationConfig(id);
+    assert.ok(config, id + ': missing presentation config');
+    assert.equal(config, OBSERVATION_MODEL_PRESENTATION_CONFIGS[id],
+      id + ': config lookup must expose the registered record');
+
+    const experience = landmarkExperience(catalog.get(id));
+    assert.deepEqual(experience.viewModes, [
+      { id: 'split', label: 'SPLIT', momentId: config.splitMomentId },
+      { id: 'observation', label: 'OBSERVATION', momentId: config.observationMomentId },
+      { id: 'model', label: '3D MODEL', momentId: config.modelMomentId },
+    ], id + ': view controls must use the shared split/observation/model order');
+
+    const modeMomentIds = experience.viewModes.map(mode => mode.momentId);
+    assert.equal(new Set(modeMomentIds).size, 3, id + ': view moments must be distinct');
+    const [split, observation, model] = modeMomentIds.map(momentId =>
+      experience.moments.find(moment => moment.id === momentId));
+    assert.ok(split && observation && model, id + ': every view must resolve to a moment');
+
+    assert.equal(observation.visual.presentation, 'observation',
+      id + ': observation presentation flag');
+    assert.equal(model.visual.presentation, 'model', id + ': model presentation flag');
+    assert.notEqual(observation.presentationOnly, true, id + ': observation belongs on the rail');
+    assert.notEqual(model.presentationOnly, true, id + ': model belongs on the rail');
+
+    assert.equal(split.presentationOnly, true, id + ': split is a control-only presentation');
+    assert.equal(split.kind, 'FLAT OBSERVATION + SCIENTIFIC 3D MODEL', id);
+    assert.equal(split.source, observation.source, id + ': split must cite the flat source');
+    assert.match(split.text, /\bflat\b/i, id + ': split copy must identify the image as flat');
+    assert.match(split.text, /does not|not a|no recovered|interpretive/i,
+      id + ': split copy must not imply recovered image depth');
+    assert.equal(split.visual.state, 'split', id + ': split renderer state');
+    assert.equal(split.visual.observation, true, id + ': split retains the source observation');
+    assert.equal(split.visual.presentation, 'split', id + ': split presentation flag');
+    assert.deepEqual(split.visual.delegate, model.visual,
+      id + ': split must delegate the unchanged 3D model visual');
+    for (const key of ['theta', 'phi', 'distance'])
+      assert.equal(split.visual[key], model.visual[key], id + ': split model camera ' + key);
+
+    const sequence = experience.entrySequence;
+    assert.ok(sequence, id + ': missing entry sequence');
+    assert.equal(sequence.observationMomentId, observation.id, id + ': observation sequence target');
+    assert.equal(sequence.modelMomentId, model.id, id + ': model sequence target');
+    assert.equal(sequence.splitMomentId, split.id, id + ': split sequence target');
+    assert.ok(Number.isFinite(sequence.holdSeconds) &&
+      sequence.holdSeconds >= .25 && sequence.holdSeconds <= 2,
+    id + ': observation hold must stay brief');
+    assert.ok(Number.isFinite(sequence.durationSeconds) &&
+      sequence.durationSeconds >= 1.5 && sequence.durationSeconds <= 6,
+    id + ': model reveal must remain legible and bounded');
+    assert.ok(Number.isFinite(sequence.readinessTimeoutSeconds) &&
+      sequence.readinessTimeoutSeconds >= .25 && sequence.readinessTimeoutSeconds <= 3,
+    id + ': image readiness wait must be bounded');
+    assert.ok(sequence.readinessTimeoutSeconds <= sequence.durationSeconds,
+      id + ': readiness timeout must not exceed the reveal');
+    assert.equal(experience.defaultMoment, model.id,
+      id + ': story semantics must remain model-first after adding the intro');
+  }
+
+  const directCrab = landmarkExperience(catalog.get('crab-nebula'));
+  assert.equal(directCrab.entrySequence.modelMomentId, 'crab-pulsar');
+  assert.deepEqual(directCrab.viewModes.map(mode => mode.id),
+    ['split', 'observation', 'model']);
 });
 
 test('Explore exposes only curated, unique, model-led identities', async () => {
@@ -693,18 +751,90 @@ test('Explore exposes only curated, unique, model-led identities', async () => {
   }
 });
 
-test('every modeled Explore experience opens on 3D rather than an observation plate', () => {
+test('black holes stay model-first while curated deep-sky routes declare observation intros', () => {
   const catalog = new Map(LANDMARKS.map(entry => [entry.id, entry]));
-  for (const id of EXPLORE_LANDMARK_IDS){
-    if (id === 'pale-blue-dot') continue;
+  for (const id of HIGH_FIDELITY_PRESENTATION_IDS){
+    const experience = landmarkExperience(catalog.get(id));
+    assert.ok(experience.entrySequence, id + ': missing observation intro metadata');
+    assert.equal(experience.entrySequence.modelMomentId, experience.defaultMoment, id);
+    assert.notEqual(experience.entrySequence.observationMomentId, experience.defaultMoment, id);
+  }
+
+  const blackHoleIds = EXPLORE_SECTIONS
+    .find(section => section.id === 'black-holes').items.map(item => item.id);
+  for (const id of blackHoleIds){
     const experience = landmarkExperience(catalog.get(id));
     const initial = experience.moments.find(moment => moment.id === experience.defaultMoment);
-    assert.ok(initial, id + ': missing default moment');
-    assert.match(initial.kind, /MODEL|RECONSTRUCTION|VISUALIZATION/,
-      id + ': Explore must open on its 3D model');
-    assert.doesNotMatch(initial.kind, /^OBSERVATION|INFRARED OBSERVATION$/,
-      id + ': Explore opened on a flat observation');
+    assert.equal(initial.kind, 'SCIENTIFIC VISUALIZATION', id + ': default must remain the model');
+    assert.equal(initial.visual.state, 'model', id + ': default visual state');
+    assert.equal(experience.entrySequence, undefined, id + ': black holes do not use the deep-sky intro');
+    assert.equal(experience.viewModes, undefined, id + ': black holes keep their evidence chapters');
   }
+});
+
+test('deep-sky presentation runtime is frame-driven, cancellable and keeps observations flat', async () => {
+  const [main, presenter, hud, markup, css] = await Promise.all([
+    readFile(new URL('../js/main.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/ui/deepSkyPresentation.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/ui/hud.js', import.meta.url), 'utf8'),
+    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../css/main.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(main,
+    /this\._landmarkIntro\s*=\s*\{[\s\S]{0,240}?phase:\s*'await-observation'/,
+    'entry must begin in an explicit image-readiness phase');
+  for (const phase of ['await-observation', 'hold', 'reveal'])
+    assert.match(main, new RegExp(`intro\\.phase === '${phase}'`), 'missing intro phase ' + phase);
+  assert.match(main,
+    /intro\.phase\s*=\s*'reveal'[\s\S]{0,220}?deepSkyPresentation\.beginReveal\(\)[\s\S]{0,420}?dur:\s*intro\.sequence\.durationSeconds/,
+    'the observation turn and camera flight must share declarative timing');
+  assert.match(main,
+    /_cancelLandmarkIntro\([^)]*\)\{[\s\S]{0,260}?_landmarkIntroGeneration\+\+[\s\S]{0,120}?_landmarkIntro\s*=\s*null[\s\S]{0,120}?rig\.cancelFlight\(\)/,
+    'route and user takeover must invalidate intro state and camera motion');
+  assert.match(main,
+    /if\s*\(meta\.user\)\s*this\._cancelLandmarkIntro\(\{ clearPresentation: false \}\)/,
+    'manual view selection must cancel the automatic intro');
+  assert.match(main,
+    /if\s*\(document\.hidden\)\{[\s\S]{0,100}?_takeOverLandmarkIntro\(\)/,
+    'backgrounded tabs must settle instead of replaying stale animation');
+  assert.match(main,
+    /matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches[\s\S]{0,100}?_settleLandmarkIntro\(\{ snapToModel: true \}\)/,
+    'reduced-motion users must skip directly to the model');
+
+  const overlayStart = markup.indexOf('<section id="deepSkyPresentation"');
+  const overlayEnd = markup.indexOf('</section>', overlayStart);
+  assert.ok(overlayStart >= 0 && overlayEnd > overlayStart, 'missing presentation overlay markup');
+  const overlayMarkup = markup.slice(overlayStart, overlayEnd);
+  const overlayImageIds = [...overlayMarkup.matchAll(/<img\b[^>]*\bid="([^"]+)"[^>]*>/g)]
+    .map(match => match[1]);
+  assert.deepEqual(overlayImageIds, ['dspObservationImage', 'dspSplitImage'],
+    'observation and split modes must use plain image elements');
+  assert.doesNotMatch(overlayMarkup, /<canvas\b|<video\b/i,
+    'the observation overlay must remain a flat image, not generated media');
+  assert.match(presenter,
+    /this\.observationImage\.src\s*=\s*record\.file;[\s\S]{0,80}?this\.splitImage\.src\s*=\s*record\.file;/,
+    'full and split views must receive the exact same source asset');
+  assert.doesNotMatch(presenter, /\bsetTimeout\s*\(/,
+    'presentation timing must come from the app frame loop');
+  assert.match(css,
+    /\.dsp-observation-face img,[\s\S]{0,220}?object-fit:contain;[\s\S]{0,100}?filter:none;\s*transform:none;/,
+    'source pixels must remain uncropped and unfiltered');
+
+  assert.match(hud,
+    /const viewModes\s*=\s*Array\.isArray\(experience\.viewModes\)/,
+    'HUD view controls must be driven by experience metadata');
+  assert.match(hud,
+    /experience\.moments\.filter\(moment\s*=>\s*!moment\.presentationOnly\)/,
+    'control-only split moments must stay off the semantic story rail');
+  assert.match(hud,
+    /selectStoryMoment\(mode\.momentId,\s*true,\s*\{ user: true \}\)/,
+    'view buttons must signal manual takeover');
+  assert.match(hud,
+    /selectStoryMoment\(initial,\s*true,\s*initialMomentId\s*\?\s*\{ intro: true \}\s*:\s*\{\}\)/,
+    'the observation entry moment must carry intro metadata');
+  assert.match(hud, /this\._storySelect\(moment, meta\)/,
+    'selection metadata must reach the app state machine');
 });
 
 test('black-hole observation chapters preserve a persistent 3D hero', async () => {
@@ -795,7 +925,13 @@ test('reprocessed observations and image-less archives expose truthful story sta
     assert.equal(moment.visual.observation, false, id);
     assert.equal(moment.visual.state, 'archive-record', id);
     assert.match(moment.text, /No verified visual asset is displayed/, id);
+    assert.equal(story.entrySequence, undefined, id + ': archive must not gain an intro');
+    assert.equal(story.viewModes, undefined, id + ': archive must not claim presentation views');
   }
+
+  const incomplete = { defaultMoment: 'archive-record', moments: [{ id: 'archive-record' }] };
+  assert.equal(withObservationModelPresentation({ id: 'orion-nebula' }, incomplete), incomplete,
+    'the wrapper must leave incomplete experiences unchanged');
 });
 
 test('retained modern supernovae use dedicated indexed 3D sculpts plus observations', async () => {
@@ -860,7 +996,8 @@ test('landmark attribution switches between model and authentic observation', as
   assert.doesNotMatch(view, /fallbackCredit[\s\S]{0,180}?modelCredit/);
   assert.match(hud, /setLandmarkCredit\(credit\)/);
   assert.match(main,
-    /this\.landmarkView\.setMoment\(moment\);\s*this\.hud\.setLandmarkCredit\(this\.landmarkView\.currentCredit\(\)\)/);
+    /this\.landmarkView\.setMoment\(moment, visual\.delegate\);\s*this\.hud\.setLandmarkCredit\(this\.landmarkView\.currentCredit\(\)\)/,
+    'split presentations must delegate the model visual before resolving attribution');
   assert.match(main,
     /visual\.wavelength === 'infrared' \|\|\s*\/infrared\/i\.test\(String\(visual\.state \|\| ''\)\)/,
     'the wavelength control must resolve Crab’s state-named infrared moment');

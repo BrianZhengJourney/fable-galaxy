@@ -25,8 +25,10 @@ import { TourEngine } from './core/tour.js';
 import { TOURS } from './data/tours.js';
 import { Photometer } from './ui/photometer.js';
 import { AudioEngine } from './ui/audio.js';
+import { DeepSkyPresentation } from './ui/deepSkyPresentation.js';
 import { LandmarkView } from './scenes/landmarkView.js';
 import { LANDMARKS, LANDMARK_CATEGORIES } from './data/landmarks.js';
+import { landmarkImage } from './data/landmarkImages.js';
 import { landmarkExperience, bodyExperience } from './data/fieldStories.js';
 import { EXPLORE_LANDMARK_IDS, EXPLORE_SECTIONS } from './data/exploreSections.js';
 import { DEFAULT_SOL_EPOCH, SOL_EPOCHS, resolveSolEpoch } from './data/solEpochs.js';
@@ -59,6 +61,7 @@ class App {
     this.labels = new LabelManager(document.getElementById('labels'));
     this.audio = new AudioEngine();
     this.hud = new Hud(this);
+    this.deepSkyPresentation = new DeepSkyPresentation();
 
     this.raycaster = new THREE.Raycaster();
     this.ndc = new THREE.Vector2();
@@ -82,6 +85,8 @@ class App {
     this.photometer = new Photometer();
     this.landmarkView = null;
     this.landmarkIndex = -1;
+    this._landmarkIntro = null;
+    this._landmarkIntroGeneration = 0;
     this._wireLandmarks();
     this.hud.syncTimeButtons(this.time.rate);
 
@@ -93,6 +98,7 @@ class App {
             this.skyPitch + dy * 0.0032 * (this.camera.fov / 52)));
           return;
         }
+        if (this.mode === 'landmark') this._takeOverLandmarkIntro();
         this.rig.drag(dx, dy); this.rig.interact(this.now);
       },
       wheel: dy => {
@@ -101,6 +107,7 @@ class App {
           this.camera.updateProjectionMatrix();
           return;
         }
+        if (this.mode === 'landmark') this._takeOverLandmarkIntro();
         this.rig.zoom(dy); this.rig.interact(this.now); this._checkAscend();
       },
       click: (x, y) => this._onClick(x, y),
@@ -302,6 +309,7 @@ class App {
 
   enterLandmark(entry){
     this._clearHover();
+    this._cancelLandmarkIntro({ clearPresentation: true });
     if (this.mode !== 'landmark'){
       this._hideBodyStory();
       this._preLandmarkRate = this.time.rate;
@@ -346,17 +354,62 @@ class App {
     this.rig.autoRotate = this.landmarkView.autoRotate();
     this.rig.minDist = this.landmarkView.minDist();
     this.rig.maxDist = this.landmarkView.maxDist();
-    const startTheta = this.landmarkView.startTheta();
-    const startPhi = this.landmarkView.startPhi();
-    const startPose = {
-      getTarget: () => ORIGIN,
-      dist: this.landmarkView.maxDist() * 0.85,
-      phi: startPhi == null ? 1.05 : startPhi,
-    };
-    if (startTheta != null) startPose.theta = startTheta;
-    this.rig.snap(startPose);
-    this.rig.flyTo({ dist: this.landmarkView.focusDist(), dur: 1.3 });
-    this.hud.showStoryline(experience, moment => this._applyLandmarkMoment(moment));
+    const sequence = experience && experience.entrySequence;
+    const observationMoment = sequence && experience.moments.find(moment =>
+      moment.id === sequence.observationMomentId);
+    if (sequence && observationMoment){
+      const image = landmarkImage(entry.id);
+      const visual = observationMoment.visual || {};
+      const factor = visual.distance == null ? 1 : visual.distance;
+      const generation = ++this._landmarkIntroGeneration;
+      const observationLoad = this.deepSkyPresentation.prepare({
+        entry,
+        image,
+        durationMs: sequence.durationSeconds * 1000,
+      });
+      this._landmarkIntro = {
+        generation,
+        experience,
+        sequence,
+        phase: 'await-observation',
+        elapsed: 0,
+        observationSettled: false,
+        observationAvailable: false,
+      };
+      observationLoad.then(available => {
+        const intro = this._landmarkIntro;
+        if (!intro || intro.generation !== generation) return;
+        intro.observationSettled = true;
+        intro.observationAvailable = available;
+      });
+      this.rig.snap({
+        getTarget: () => ORIGIN,
+        dist: this.landmarkView.focusDist() * factor,
+        theta: visual.theta == null ? 0 : visual.theta,
+        phi: visual.phi == null ? Math.PI / 2 : visual.phi,
+      });
+    } else {
+      this.deepSkyPresentation.clear();
+      const startTheta = this.landmarkView.startTheta();
+      const startPhi = this.landmarkView.startPhi();
+      const startPose = {
+        getTarget: () => ORIGIN,
+        dist: this.landmarkView.maxDist() * 0.85,
+        phi: startPhi == null ? 1.05 : startPhi,
+      };
+      if (startTheta != null) startPose.theta = startTheta;
+      this.rig.snap(startPose);
+      this.rig.flyTo({ dist: this.landmarkView.focusDist(), dur: 1.3 });
+    }
+    this.hud.showStoryline(
+      experience,
+      (moment, meta) => this._applyLandmarkMoment(moment, meta),
+      { initialMomentId: observationMoment && observationMoment.id },
+    );
+    const reducedMotion = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (this._landmarkIntro && reducedMotion)
+      this._settleLandmarkIntro({ snapToModel: true });
   }
 
   _landmarkStep(dir){
@@ -370,6 +423,8 @@ class App {
 
   _setLandmarkWavelength(on){
     if (!this.landmarkView) return;
+    this._takeOverLandmarkIntro();
+    this.deepSkyPresentation.showModel();
     this.landmarkView.setIR(on);
     this.hud.setLandmarkWavelength(on);
     const experience = landmarkExperience(this.landmarkView.entry);
@@ -387,20 +442,125 @@ class App {
     this.hud.setLandmarkCredit(this.landmarkView.currentCredit());
   }
 
-  _applyLandmarkMoment(moment){
+  _applyLandmarkMoment(moment, meta = {}){
     if (!this.landmarkView || !moment) return;
-    this.landmarkView.setMoment(moment);
-    this.hud.setLandmarkCredit(this.landmarkView.currentCredit());
+    if (meta.user) this._cancelLandmarkIntro({ clearPresentation: false });
     const visual = moment.visual || {};
+    const presentation = visual.presentation;
+    if (presentation === 'observation') this.deepSkyPresentation.showObservation();
+    else if (presentation === 'split') this.deepSkyPresentation.showSplit();
+    else if (presentation === 'model') this.deepSkyPresentation.showModel();
+    else if (meta.user) this.deepSkyPresentation.showModel();
+    this.landmarkView.setMoment(moment, visual.delegate);
+    this.hud.setLandmarkCredit(this.landmarkView.currentCredit());
     if (visual.wavelength) this.hud.setLandmarkWavelength(visual.wavelength === 'infrared');
+    if (meta.intro) return;
     const factor = visual.distance == null ? 1 : visual.distance;
     this.rig.flyTo({
       getTarget: () => ORIGIN,
       dist: this.landmarkView.focusDist() * factor,
       theta: visual.theta,
       phi: visual.phi,
-      dur: .95,
+      dur: meta.duration == null ? .95 : meta.duration,
     });
+  }
+
+  _modelMomentForIntro(intro){
+    return intro && intro.experience.moments.find(moment =>
+      moment.id === intro.sequence.modelMomentId);
+  }
+
+  _cancelLandmarkIntro({ clearPresentation = false } = {}){
+    this._landmarkIntroGeneration++;
+    this._landmarkIntro = null;
+    this.rig.cancelFlight();
+    if (clearPresentation) this.deepSkyPresentation.clear();
+  }
+
+  _takeOverLandmarkIntro(){
+    const intro = this._landmarkIntro;
+    if (!intro || !this.landmarkView) return;
+    const model = this._modelMomentForIntro(intro);
+    this._cancelLandmarkIntro({ clearPresentation: false });
+    if (model){
+      const visual = model.visual || {};
+      this.landmarkView.setMoment(model, visual.delegate);
+      this.hud.selectStoryMoment(model.id, false);
+      this.hud.setLandmarkCredit(this.landmarkView.currentCredit());
+    }
+    this.deepSkyPresentation.showModel();
+  }
+
+  _settleLandmarkIntro({ snapToModel = false } = {}){
+    const intro = this._landmarkIntro;
+    if (!intro || !this.landmarkView) return;
+    const model = this._modelMomentForIntro(intro);
+    this._landmarkIntro = null;
+    if (!model){
+      this.deepSkyPresentation.showModel();
+      return;
+    }
+    const visual = model.visual || {};
+    this.landmarkView.setMoment(model, visual.delegate);
+    this.hud.selectStoryMoment(model.id, false);
+    this.hud.setLandmarkCredit(this.landmarkView.currentCredit());
+    this.deepSkyPresentation.showModel();
+    if (snapToModel){
+      const factor = visual.distance == null ? 1 : visual.distance;
+      this.rig.snap({
+        getTarget: () => ORIGIN,
+        dist: this.landmarkView.focusDist() * factor,
+        theta: visual.theta,
+        phi: visual.phi,
+      });
+    }
+  }
+
+  _updateLandmarkIntro(dt){
+    const intro = this._landmarkIntro;
+    if (!intro || !this.landmarkView) return;
+    if (document.hidden){
+      this._takeOverLandmarkIntro();
+      return;
+    }
+    intro.elapsed += dt;
+    if (intro.phase === 'await-observation'){
+      if (!this.deepSkyPresentation.ready){
+        if (intro.elapsed < intro.sequence.readinessTimeoutSeconds &&
+            (!intro.observationSettled || intro.observationAvailable)) return;
+        this._settleLandmarkIntro({ snapToModel: true });
+        return;
+      }
+      intro.phase = 'hold';
+      intro.elapsed = 0;
+      return;
+    }
+    if (intro.phase === 'hold'){
+      if (intro.elapsed < intro.sequence.holdSeconds) return;
+      const model = this._modelMomentForIntro(intro);
+      if (!model){
+        this._settleLandmarkIntro();
+        return;
+      }
+      const visual = model.visual || {};
+      const factor = visual.distance == null ? 1 : visual.distance;
+      intro.phase = 'reveal';
+      intro.elapsed = 0;
+      this.deepSkyPresentation.beginReveal();
+      this.landmarkView.setMoment(model, visual.delegate);
+      this.audio.select();
+      this.rig.flyTo({
+        getTarget: () => ORIGIN,
+        dist: this.landmarkView.focusDist() * factor,
+        theta: visual.theta,
+        phi: visual.phi,
+        dur: intro.sequence.durationSeconds,
+      });
+      return;
+    }
+    if (intro.phase === 'reveal' &&
+        intro.elapsed >= intro.sequence.durationSeconds)
+      this._settleLandmarkIntro();
   }
 
   _restoreLandmarkClock(){
@@ -412,6 +572,7 @@ class App {
 
   _leaveLandmark(){
     if (!this.landmarkView && this._preLandmarkRate === undefined) return false;
+    this._cancelLandmarkIntro({ clearPresentation: true });
     this.hud.hideStoryline();
     this._restoreLandmarkClock();
     this.hud.hideLandmarkCard();
@@ -1079,6 +1240,7 @@ class App {
     if (!document.hidden && dt > 0.004 && dt < 0.1) this.quality.sample(dt * 1000);
 
     this.time.advance(dt);
+    if (this.mode === 'landmark') this._updateLandmarkIntro(dt);
     if (this.mode !== 'sky') this.rig.update(dt, this.now);
 
     // reticle only lives in system mode; the system branch re-shows it

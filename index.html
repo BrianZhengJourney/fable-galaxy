@@ -16,6 +16,30 @@
 
 <div id="stage"></div>
 
+<!-- observation-to-model presentation layer (visual only; controls stay in the HUD) -->
+<section id="deepSkyPresentation" aria-label="Deep-sky observation and 3D model presentation"
+  aria-hidden="true" data-mode="clear" data-ready="false">
+  <div class="dsp-reveal" aria-hidden="true">
+    <figure class="dsp-observation-face">
+      <img id="dspObservationImage" alt="" decoding="async">
+      <figcaption class="dsp-caption">
+        <span id="dspObservationLabel">OBSERVATION</span>
+        <span id="dspObservationCredit"></span>
+      </figcaption>
+    </figure>
+  </div>
+  <figure class="dsp-split-observation" aria-hidden="true">
+    <div class="dsp-split-frame">
+      <img id="dspSplitImage" alt="" decoding="async">
+    </div>
+    <figcaption class="dsp-caption">
+      <span id="dspSplitLabel">OBSERVATION</span>
+      <span id="dspSplitCredit"></span>
+    </figcaption>
+  </figure>
+</section>
+<p id="dspStatus" class="dsp-sr-only" aria-live="polite"></p>
+
 <!-- cockpit dressing -->
 <div id="vignette"></div>
 <div id="scanlines"></div>
