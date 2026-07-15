@@ -869,6 +869,37 @@ test('landmark HUD removes repeated copy without hiding detail or provenance', a
     'source links must describe the active chapter');
 });
 
+test('Explore presents image-led cards while retaining accessible catalog detail', async () => {
+  const [markup, css, hud] = await Promise.all([
+    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../css/main.css', import.meta.url), 'utf8'),
+    readFile(new URL('../js/ui/hud.js', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(markup, /id="lmIntro" class="dsp-sr-only"/,
+    'Explore context should remain available without occupying the visual header');
+  assert.match(markup, /id="lmCount" aria-hidden="true"/,
+    'the duplicate total count should stay out of the visual and accessible title');
+  assert.match(css, /body\.explore-open #hdr, body\.explore-open #hints\{ opacity:0;/,
+    'the underlying page chrome should leave while the catalog dialog is active');
+  assert.match(css, /\.lm-kicker, #lmCount\{ display:none; \}/,
+    'the Explore title should not be surrounded by redundant header copy');
+  assert.match(css, /\.lm-section-index, \.lm-section-count\{ display:none; \}/,
+    'category headings should not repeat ordinal and count labels');
+  assert.match(css, /\.lm-badges\{ display:none; \}/,
+    'image cards should not carry persistent mode badges');
+  assert.match(css, /\.lm-item \.s\{ display:none; \}/,
+    'image cards should show one object name instead of a second designation line');
+
+  assert.match(hud, /intro\.className = 'dsp-sr-only'/,
+    'section descriptions must remain available to assistive technology');
+  assert.match(hud,
+    /const accessibleDetails = \[e\.designation, \.\.\.record\.badges\][\s\S]{0,220}?item\.setAttribute\('aria-label', 'Explore ' \+ e\.name/,
+    'hidden card metadata must be folded into the accessible card name');
+  assert.match(hud, /document\.body\.classList\.toggle\('explore-open', visible\)/,
+    'dialog visibility must own the page-chrome suppression state');
+});
+
 test('black-hole observation chapters preserve a persistent 3D hero', async () => {
   for (const id of ['cygnus-x-1', 'm87-star', 'sagittarius-a-star', 'gw150914']){
     const experience = landmarkExperience(LANDMARKS.find(entry => entry.id === id));

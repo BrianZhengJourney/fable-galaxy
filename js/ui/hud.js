@@ -178,12 +178,15 @@ export class Hud {
       const index = document.createElement('span');
       index.className = 'lm-section-index';
       index.textContent = String(sectionIndex + 1).padStart(2, '0') + ' · ' + section.kicker;
+      index.setAttribute('aria-hidden', 'true');
       const title = document.createElement('h3');
       title.textContent = section.label;
       const count = document.createElement('span');
       count.className = 'lm-section-count';
       count.textContent = section.items.length + (section.items.length === 1 ? ' EXPERIENCE' : ' EXPERIENCES');
+      count.setAttribute('aria-hidden', 'true');
       const intro = document.createElement('p');
+      intro.className = 'dsp-sr-only';
       intro.textContent = section.intro;
       heading.appendChild(index);
       heading.appendChild(title);
@@ -199,7 +202,9 @@ export class Hud {
         item.type = 'button';
         item.className = 'lm-item';
         item.dataset.landmark = e.id;
-        item.setAttribute('aria-label', 'Explore ' + e.name);
+        const accessibleDetails = [e.designation, ...record.badges].filter(Boolean).join(' · ');
+        item.setAttribute('aria-label', 'Explore ' + e.name +
+          (accessibleDetails ? ' · ' + accessibleDetails : ''));
         const img = landmarkImage(e.id);
         if (img){
           item.classList.add('has-image');
