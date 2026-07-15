@@ -691,12 +691,10 @@ test('all curated nebulae and remnants share one observation-to-model presentati
     assert.equal(sequence.observationMomentId, observation.id, id + ': observation sequence target');
     assert.equal(sequence.modelMomentId, model.id, id + ': model sequence target');
     assert.equal(sequence.splitMomentId, split.id, id + ': split sequence target');
-    assert.ok(Number.isFinite(sequence.holdSeconds) &&
-      sequence.holdSeconds >= 3 && sequence.holdSeconds <= 5,
-    id + ': observation hold must remain visible for 3–5 seconds');
-    assert.ok(Number.isFinite(sequence.durationSeconds) &&
-      sequence.durationSeconds >= 1.5 && sequence.durationSeconds <= 6,
-    id + ': model reveal must remain legible and bounded');
+    assert.equal(sequence.holdSeconds, 2.5,
+      id + ': observation hold must last 2.5 seconds');
+    assert.equal(sequence.durationSeconds, 2.5,
+      id + ': model reveal must last 2.5 seconds');
     assert.ok(Number.isFinite(sequence.readinessTimeoutSeconds) &&
       sequence.readinessTimeoutSeconds >= .25 && sequence.readinessTimeoutSeconds <= 3,
     id + ': image readiness wait must be bounded');

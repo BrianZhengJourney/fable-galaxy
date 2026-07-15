@@ -4,8 +4,8 @@
    semantics or treating a flat source frame as recovered spatial depth. */
 
 const ENTRY_TIMING = Object.freeze({
-  holdSeconds: 4,
-  durationSeconds: 3.2,
+  holdSeconds: 2.5,
+  durationSeconds: 2.5,
   readinessTimeoutSeconds: 1.6,
 });
 
