@@ -691,10 +691,12 @@ test('all curated nebulae and remnants share one observation-to-model presentati
     assert.equal(sequence.observationMomentId, observation.id, id + ': observation sequence target');
     assert.equal(sequence.modelMomentId, model.id, id + ': model sequence target');
     assert.equal(sequence.splitMomentId, split.id, id + ': split sequence target');
-    assert.equal(sequence.holdSeconds, 2.5,
-      id + ': observation hold must last 2.5 seconds');
-    assert.equal(sequence.durationSeconds, 2.5,
-      id + ': model reveal must last 2.5 seconds');
+    assert.equal(sequence.holdSeconds, 1.2,
+      id + ': observation hold should be brief');
+    assert.equal(sequence.durationSeconds, 1.2,
+      id + ': model reveal should be brief');
+    assert.equal(sequence.readinessTimeoutSeconds, 0.8,
+      id + ': a slow source image must not delay the model for long');
     assert.ok(Number.isFinite(sequence.readinessTimeoutSeconds) &&
       sequence.readinessTimeoutSeconds >= .25 && sequence.readinessTimeoutSeconds <= 3,
     id + ': image readiness wait must be bounded');
@@ -818,6 +820,14 @@ test('deep-sky presentation runtime is frame-driven, cancellable and keeps obser
   assert.match(css,
     /\.dsp-observation-face img,[\s\S]{0,220}?object-fit:contain;[\s\S]{0,100}?filter:none;\s*transform:none;/,
     'source pixels must remain uncropped and unfiltered');
+  assert.match(markup, /id="dspObjectName" class="dsp-object-name"/,
+    'the cinematic intro must retain a dedicated object title');
+  assert.match(presenter,
+    /this\.objectName\.textContent\s*=\s*name;/,
+    'the persistent title must use the selected Explore object name');
+  assert.match(css,
+    /data-mode="observation"\] \.dsp-object-name,[\s\S]{0,100}?data-mode="revealing"\] \.dsp-object-name[\s\S]{0,100}?opacity:1;/,
+    'the selected object name must remain visible through observation and reveal');
 
   assert.match(hud,
     /const viewModes\s*=\s*Array\.isArray\(experience\.viewModes\)/,

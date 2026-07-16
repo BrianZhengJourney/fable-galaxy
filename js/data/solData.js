@@ -23,7 +23,9 @@ export const SOL_BODIES = [
            'ORBITAL PERIOD':'224.7 d', 'ROTATION':'243 d RETRO', 'MOONS':'0' } },
   { name:'EARTH', eph:'EARTH', cls:'ROCKY · TEMPERATE', r:0.9, dist:19.5, period:365.25, rotP:0.997, tilt:23.4,
     phase:4.1,  view:7,  tex:{type:'earth', base:'#1b4f8a', dark:'#0d2c55', light:'#3f8f5f'},
-    moons:[{ r:0.24, dist:2.0, period:27.32 }],
+    moons:[{ name:'LUNA', r:0.24, dist:2.0, period:27.32, color:'#9a948c',
+      info:{ 'RADIUS':'1,737.4 km', 'MASS':'7.342 ×10²² kg', 'SURFACE TEMP':'−20 °C (avg)',
+             'ORBITAL PERIOD':'27.32 d', 'ROTATION':'TIDALLY LOCKED', 'PARENT':'EARTH' } }],
     info:{ 'RADIUS':'6,371.0 km', 'MASS':'5.972 ×10²⁴ kg', 'SURFACE TEMP':'15 °C',
            'ORBITAL PERIOD':'365.25 d', 'ROTATION':'23.93 h', 'MOONS':'1' } },
   { name:'MARS', eph:'MARS', cls:'ROCKY · ARID', r:0.55, dist:24, period:686.98, rotP:1.026, tilt:25.2,
@@ -35,14 +37,27 @@ export const SOL_BODIES = [
     // Galileo: a dark, dust-fed halo/main/gossamer system — intentionally
     // orders of magnitude fainter in the scene than Saturn's icy rings.
     rings:{ inner:1.29, outer:3.05, opacity:0.075, color:'#806d5b' },
-    moons:[{ r:0.16, dist:3.6, period:1.77 },{ r:0.14, dist:4.3, period:3.55 },
-           { r:0.22, dist:5.2, period:7.15 },{ r:0.20, dist:6.3, period:16.69 }],
+    moons:[
+      { name:'IO', r:0.16, dist:3.6, period:1.77, color:'#d8b56b',
+        info:{ 'RADIUS':'1,821.6 km', 'ORBITAL PERIOD':'1.77 d', 'SURFACE':'SULFUR-RICH · VOLCANIC', 'PARENT':'JUPITER' } },
+      { name:'EUROPA', r:0.14, dist:4.3, period:3.55, color:'#c8b898',
+        info:{ 'RADIUS':'1,560.8 km', 'ORBITAL PERIOD':'3.55 d', 'SURFACE':'WATER-ICE SHELL', 'PARENT':'JUPITER' } },
+      { name:'GANYMEDE', r:0.22, dist:5.2, period:7.15, color:'#8f8170',
+        info:{ 'RADIUS':'2,634.1 km', 'ORBITAL PERIOD':'7.15 d', 'CLASS':'LARGEST SOLAR MOON', 'PARENT':'JUPITER' } },
+      { name:'CALLISTO', r:0.20, dist:6.3, period:16.69, color:'#756b60',
+        info:{ 'RADIUS':'2,410.3 km', 'ORBITAL PERIOD':'16.69 d', 'SURFACE':'HEAVILY CRATERED', 'PARENT':'JUPITER' } }
+    ],
     info:{ 'RADIUS':'69,911 km', 'MASS':'1.898 ×10²⁷ kg', 'SURFACE TEMP':'-110 °C',
            'ORBITAL PERIOD':'11.86 yr', 'ROTATION':'9.93 h', 'MOONS':'95' } },
   { name:'SATURN', eph:'SATURN', cls:'GAS GIANT · RINGED', r:2.2, dist:43, period:10759, rotP:0.444, tilt:26.7,
     phase:3.9,  view:13, tex:{type:'gas', base:'#d9c28f', dark:'#a98d5c', light:'#f2e3bd', bands:7},
     rings:{ inner:1.35, outer:2.35, opacity:0.9 },
-    moons:[{ r:0.20, dist:5.8, period:15.95 },{ r:0.10, dist:4.6, period:4.52 }],
+    moons:[
+      { name:'TITAN', r:0.20, dist:5.8, period:15.95, color:'#c49a55',
+        info:{ 'RADIUS':'2,574.7 km', 'ORBITAL PERIOD':'15.95 d', 'ATMOSPHERE':'DENSE NITROGEN', 'PARENT':'SATURN' } },
+      { name:'RHEA', r:0.10, dist:4.6, period:4.52, color:'#aaa7a1',
+        info:{ 'RADIUS':'763.8 km', 'ORBITAL PERIOD':'4.52 d', 'SURFACE':'WATER ICE', 'PARENT':'SATURN' } }
+    ],
     info:{ 'RADIUS':'58,232 km', 'MASS':'5.683 ×10²⁶ kg', 'SURFACE TEMP':'-140 °C',
            'ORBITAL PERIOD':'29.46 yr', 'ROTATION':'10.66 h', 'MOONS':'274' } },
   { name:'URANUS', eph:'URANUS', cls:'ICE GIANT · RINGED', r:1.5, dist:52, period:30687, rotP:-0.718, tilt:97.8,

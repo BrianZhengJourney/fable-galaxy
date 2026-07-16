@@ -108,6 +108,10 @@ Primary sources & licenses:
   Tycho's Supernova, Cygnus X-1.
 - **Event Horizon Telescope Collaboration / ESO** (CC BY 4.0): Sgr A*.
 - **LIGO Scientific Collaboration & Virgo** (CC BY 3.0): GW150914 signal figure.
+- **LIGO / NSF / Aurore Simmonet (Sonoma State University)**: official
+  GW150914 discovery artwork showing inspiral, merger, ringdown and the two
+  detector waveforms. Source:
+  <https://www.ligo.caltech.edu/image/159>.
 - **ESO / IDA / Danish 1.5 m** (CC BY 4.0): Lagoon Nebula optical B/V/R
   composite (`potw1016a`). Credit: R. Gendler, U.G. Jørgensen and K. Harpsøe.
   Source: <https://www.eso.org/public/images/potw1016a/>.

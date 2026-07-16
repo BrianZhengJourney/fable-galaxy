@@ -734,30 +734,50 @@ export function buildGW150914Featured({ entry, image }){
   group.userData.flatSourceImage = false;
   group.userData.modelAlwaysVisible = true;
   group.userData.observationPolicy =
-    'detector figure is a flat sidecar; explanatory 3D merger remains visible';
+    'official artwork or detector figure stays flat beside the explanatory 3D merger';
   group.add(modelRoot);
-  const observationDock = createObservationDock({
-    image,
-    name: `BlackHoleMerger.${entry.id}.ObservationDock`,
+  const illustration = image && image.coverFile ? {
+    file: image.coverFile,
+    credit: image.coverCredit || image.credit,
+    alt: image.coverAlt || '',
+  } : image;
+  const illustrationDock = createObservationDock({
+    image: illustration,
+    name: `BlackHoleMerger.${entry.id}.IllustrationDock`,
     width: 27,
     offsetX: 24,
     offsetY: 10,
     accent: 0x93b8ff,
     heroRadius: 25,
   });
-  group.add(observationDock.group);
+  const signalDock = createObservationDock({
+    image,
+    name: `BlackHoleMerger.${entry.id}.DetectorSignalDock`,
+    width: 27,
+    offsetX: 24,
+    offsetY: 10,
+    accent: 0x93b8ff,
+    heroRadius: 25,
+  });
+  group.add(illustrationDock.group, signalDock.group);
   let disposed = false;
+  const modelCredit =
+    'Procedural 3D model · GW150914 inspiral timing and scale are illustrative';
+  let activeEvidence = 'illustration';
 
   function setMoment(visual){
     if (disposed) return;
-    const observation = isObservationMoment(visual);
+    activeEvidence = visual && visual.evidence === 'signal' ? 'signal' : 'illustration';
     modelRoot.visible = true;
-    observationDock.setVisible(observation);
-    group.userData.activePresentation = observation
-      ? 'model-plus-source-observation'
-      : 'three-dimensional-model';
+    illustrationDock.setVisible(activeEvidence === 'illustration');
+    signalDock.setVisible(activeEvidence === 'signal');
+    group.userData.observationVisible = activeEvidence === 'signal';
+    group.userData.activeEvidence = activeEvidence;
+    group.userData.activePresentation = activeEvidence === 'signal'
+      ? 'model-plus-detector-signal'
+      : 'model-plus-official-illustration';
   }
-  setMoment({ state: 'model' });
+  setMoment({ state: 'model', evidence: 'illustration' });
 
   return {
     ...delegate,
@@ -766,20 +786,34 @@ export function buildGW150914Featured({ entry, image }){
     startPhi: 1.05,
     autoRotate: false,
     isImage: false,
-    modelCredit: 'Procedural 3D model · GW150914 inspiral timing and scale are illustrative',
+    imageCredit: image && image.credit || null,
+    modelCredit,
+    creditForPresentation(){
+      const evidenceCredit = activeEvidence === 'signal'
+        ? image && image.credit
+        : illustration && illustration.credit;
+      return {
+        label: activeEvidence === 'signal'
+          ? 'DETECTOR SIGNAL + MODEL'
+          : 'OFFICIAL ILLUSTRATION + MODEL',
+        text: [evidenceCredit, modelCredit].filter(Boolean).join(' · '),
+      };
+    },
     setMoment,
     update(dt, camera){
       if (disposed) return;
       const step = clampStep(dt);
       modelRoot.visible = true;
       if (typeof delegate.update === 'function') delegate.update(step, camera);
-      observationDock.update(step, camera);
+      illustrationDock.update(step, camera);
+      signalDock.update(step, camera);
     },
     dispose(){
       if (disposed) return;
       disposed = true;
       group.userData.disposed = true;
-      observationDock.dispose();
+      illustrationDock.dispose();
+      signalDock.dispose();
       if (typeof delegate.dispose === 'function') delegate.dispose();
       group.removeFromParent();
       group.clear();

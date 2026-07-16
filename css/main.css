@@ -25,8 +25,8 @@ canvas{ display:block; }
   transition:transform .9s cubic-bezier(.22,.7,.18,1);
 }
 #deepSkyPresentation{
-  --dsp-reveal-duration:4200ms;
-  --dsp-fade-duration:3024ms;
+  --dsp-reveal-duration:1200ms;
+  --dsp-fade-duration:864ms;
   position:fixed; inset:0; z-index:7; overflow:hidden; pointer-events:none;
   visibility:hidden; opacity:0;
 }
@@ -56,6 +56,17 @@ canvas{ display:block; }
 #deepSkyPresentation[data-mode="revealing"] .dsp-observation-face{
   transform:translate3d(-5vw,0,-4vw) rotateY(-82deg) scale(.96);
   opacity:0;
+}
+.dsp-object-name{
+  position:absolute; left:32px; top:72px; z-index:3; max-width:min(72vw, 900px);
+  color:#f4fbff; opacity:0; transform:translateY(5px); pointer-events:none;
+  font:500 clamp(28px, 3.3vw, 52px)/.96 var(--display); letter-spacing:.025em;
+  text-shadow:0 2px 20px #000, 0 0 30px rgba(98,230,255,.18);
+  transition:opacity .28s ease, transform .35s ease;
+}
+#deepSkyPresentation[data-mode="observation"] .dsp-object-name,
+#deepSkyPresentation[data-mode="revealing"] .dsp-object-name{
+  opacity:1; transform:translateY(0);
 }
 #deepSkyPresentation[data-mode="split"] .dsp-reveal,
 #deepSkyPresentation[data-mode="model"] .dsp-reveal{
@@ -89,6 +100,7 @@ body.deep-sky-split #stage{ transform:translateX(-25vw); }
 @media (max-width: 780px){
   .dsp-split-observation{ width:56vw; }
   body.deep-sky-split #stage{ transform:translateX(-28vw); }
+  .dsp-object-name{ left:20px; top:62px; max-width:calc(100vw - 40px); }
   .dsp-caption{ left:10px; bottom:178px; max-width:calc(100% - 20px); font-size:6.5px; }
   .dsp-observation-face .dsp-caption{ bottom:188px; }
 }
@@ -455,8 +467,22 @@ body.explore-open #hdr, body.explore-open #hints{ opacity:0; pointer-events:none
   transition:background .15s;
 }
 .ev-item:hover{ background:rgba(255,180,94,.08); }
+.ev-item.active{
+  position:relative; background:rgba(255,180,94,.12);
+  box-shadow:inset 2px 0 0 var(--amber);
+}
+.ev-item.active::after{
+  content:'HOLD'; position:absolute; right:12px; top:7px;
+  font-family:var(--mono); font-size:8px; letter-spacing:.18em; color:var(--amber);
+}
 .ev-item .l{ font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--text); }
 .ev-item:hover .l{ color:var(--amber); }
+.ev-item.active .l{ color:var(--amber); padding-right:42px; }
+.ev-item .m{
+  margin-top:3px; white-space:nowrap; overflow:hidden;
+  font-family:var(--mono); font-size:8px; letter-spacing:.08em;
+  color:rgba(207,238,247,.58);
+}
 .ev-item .d{ font-family:var(--mono); font-size:9px; letter-spacing:.1em;
   color:rgba(207,238,247,.45); margin-top:2px; }
 .ev-item .d b{ font-weight:400; color:rgba(98,230,255,.7); }

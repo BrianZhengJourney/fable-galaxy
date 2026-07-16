@@ -181,12 +181,17 @@ class App {
     if (!route.bodySlug && this.focus) this.systemOverview();
     if (rec.sol) this.setSolEpoch(route.epoch || DEFAULT_SOL_EPOCH, { updateHash: false });
     if (route.bodySlug && this.systemView){
-      const body = this.systemView.planets.find(p => this._bodySlug(p) === route.bodySlug)
-        || this.systemView.satellites.map(s => s.body).find(b => this._bodySlug(b) === route.bodySlug);
+      const body = [
+        ...this.systemView.planets,
+        ...this.systemView.satellites.map(s => s.body),
+        ...this.systemView.features,
+      ].find(candidate => this._bodySlug(candidate) === route.bodySlug);
       if (body){
-        this.focusPlanet(body);
+        if (body.isSystemFeature) this.focusSystemFeature(body);
+        else this.focusPlanet(body);
         if (route.view === 'sky' && body.name === 'EARTH') this.enterSky();
-        else if (route.view === 'orbit' && canDescend(body)) this.enterSurface(body);
+        else if (route.view === 'orbit' && !body.isSystemFeature && canDescend(body))
+          this.enterSurface(body);
       }
     }
     this._setHash();
@@ -685,7 +690,7 @@ class App {
     return epoch;
   }
 
-  /* ---- event horizon: predicted conjunctions + comet perihelion ---- */
+  /* ---- event horizon: rare model alignments + comet perihelion ---- */
   _computeEvents(){
     if (this.mode !== 'system' || !this.systemView) return;
     const star = this.systemRec.name;
@@ -696,12 +701,14 @@ class App {
     }));
     this._events = predictEvents(bodies, this.systemView.def.comet || null,
                                  this.time.simDays);
+    this._heldEvent = null;
     this.hud.renderEvents(this._events, d => this.time.fmtDateAt(d),
       ev => {
-        this.time.simDays = ev.t - 2;      // arrive two days early, slowed down
-        this.time.setRate(2);
+        this.time.simDays = ev.t;          // inspect the exact model state, held still
+        this.time.setRate(0);
+        this._heldEvent = ev;
         this.hud.syncTimeButtons(this.time.rate);
-        setTimeout(() => this._computeEvents(), 200);
+        this._setHash();
       });
   }
 
@@ -761,6 +768,7 @@ class App {
       return this.exitToGalaxy();
     // zoom INTO a focused solid planet → drop to low orbit
     if (this.mode === 'system' && this.focus && !this.focus.isStar &&
+        !this.focus.isSystemFeature &&
         canDescend(this.focus) && this.rig.dist <= this.rig.minDist * 1.02)
       this.enterSurface(this.focus);
   }
@@ -792,6 +800,29 @@ class App {
     if (this.systemRec && this.systemRec.sol)
       this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId), p.name);
     this._showBodyStory(p);
+    this._crumbs();
+  }
+
+  focusSystemFeature(feature){
+    this._hideBodyStory();
+    this.focus = feature;
+    this.audio.select();
+    const belt = feature.featureType === 'belt';
+    this.rig.minDist = belt ? 7 : 2.2;
+    this.rig.flyTo({
+      getTarget: () => feature.group.position,
+      dist: feature.cfg.view,
+      phi: belt ? 0.5 : undefined,
+      dur: 1.25,
+    });
+    this.hud.showPanel(
+      belt ? 'REGION LOCK' : 'SMALL-BODY LOCK',
+      feature.name,
+      feature.cfg.cls,
+      feature.cfg.info,
+    );
+    if (this.systemRec && this.systemRec.sol)
+      this.hud.setSolEpoch(resolveSolEpoch(this.solEpochId));
     this._crumbs();
   }
 
@@ -1089,7 +1120,7 @@ class App {
     const hit = this._raycast(x, y);
     if (this.mode === 'system'){
       // armed transfer: the next planet clicked becomes the destination
-      if (this.transferOrigin && hit && !hit.isStar && !hit.isMoon && hit !== this.transferOrigin)
+      if (this.transferOrigin && hit && hit.isPlanet && hit !== this.transferOrigin)
         return this._launchMission(this.transferOrigin, hit);
       if (this.transferOrigin && !hit){
         this.transferOrigin = null;
@@ -1097,6 +1128,7 @@ class App {
       }
       if (!hit) return this.systemOverview();
       if (hit.isStar) return this.focusStar();
+      if (hit.isSystemFeature) return this.focusSystemFeature(hit);
       return this.focusPlanet(hit);
     }
     // galaxy mode
@@ -1281,7 +1313,8 @@ class App {
 
       // refresh the event list once time overtakes it (throttled)
       this._evTick = (this._evTick || 0) + 1;
-      if (this._evTick % 90 === 0 && this._events && this._events.length &&
+      if (this.time.rate !== 0 && this._evTick % 90 === 0 &&
+          this._events && this._events.length &&
           this.time.simDays > this._events[0].t + 0.5)
         this._computeEvents();
 

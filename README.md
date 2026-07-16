@@ -45,11 +45,10 @@ The five timeline-driven field exhibits have direct preview URLs:
 The physical black-hole models are available at `#/sagittarius-a` and at the
 `cygnus-x-1`, `m87-star`, `sagittarius-a-star`, and `gw150914` landmark routes.
 
-Nine more nebulae use dedicated photo-sculpt 3D profiles: Orion, Horsehead,
-Ring, Helix, Lagoon, Cat's Eye, Veil, Rosette, and Trifid. Each starts as the
-scientific 3D interpretation and offers the exact source observation as an
-explicit head-on view. Horsehead also has a prominent `3D MODEL / OBSERVATION /
-SPLIT` control for direct side-by-side comparison. The former generic
+The curated nebula and remnant fields use dedicated photo-sculpt 3D profiles.
+Each opens with a short 1.2-second source-observation hold, keeps the object
+name visible through a 1.2-second reveal, and then exposes `SPLIT /
+OBSERVATION / 3D MODEL` controls for direct comparison. The former generic
 soft-cloud box is not part of this path. Preview any one with
 `http://127.0.0.1:8741/#/landmark/<id>`; for example:
 
@@ -76,7 +75,9 @@ Three nested scales, seamlessly connected:
 - **System view** — you start in **Sol**, running on **real JPL ephemerides**
   (Keplerian elements + centennial rates): the date readout shows where the
   planets truly are. Saturn's rings, moons, the asteroid belt, and a
-  long-period comet whose tail always points away from the star.
+  long-period comet whose tail always points away from the star. Every rendered
+  semantic object is selectable: the Sun, eight planets, visible rings, seven
+  modeled moons, the belt and the comet.
 - **Model epoch** — a separate appearance control changes the Sun, rocky-world
   climate overlays, giant-planet weather, artificial night lights, axial-tilt
   scenarios and ring confidence at 1 Ga, 5 Ma and today. Mercury stays
@@ -113,7 +114,9 @@ Thirty-two destinations, including:
   GW150914 share a camera-aware shader core: a true-black horizon, turbulent
   accretion flow, Doppler-brightened side and upper/lower lensed disk images.
   Each keeps its real context—S-cluster orbits, M87's jet, Cygnus X-1's donor
-  star and mass-transfer stream, or a near-vacuum merger.
+  star and mass-transfer stream, or a near-vacuum merger. GW150914 pairs its
+  model with official LIGO discovery artwork, then swaps to the authentic
+  detector-strain figure in the detection chapter.
 - **PSR B1257+12** — a millisecond pulsar with sweeping beams and the first
   exoplanets ever discovered (Draugr, Poltergeist, Phobetor, 1992).
 - **Binary systems** — Alpha Centauri B and the white dwarf Sirius B orbit
@@ -122,9 +125,10 @@ Thirty-two destinations, including:
 
 And on top of the map:
 
-- **Event Horizon** — predicted conjunctions and comet perihelia, found by
-  root-finding over the (pure-function-of-time) positions; click to jump the
-  clock to the event.
+- **Event Horizon** — rare five-, six- and seven-planet model groupings plus
+  comet perihelia. Long-range groupings show their member worlds, angular arc
+  and year-only `MODEL PROJECTION` label; click any event to jump there and
+  hold the simulation still.
 - **Mission planner** — plot a Hohmann transfer between any two planets; the
   launch window is solved numerically (Earth→Mars resolves to the real
   late-2028 window), then a probe flies the arc. Fully time-reversible.
@@ -173,7 +177,7 @@ js/
     route.js          hash parser for orbital date + independent model epoch
     cameraRig.js      spherical rig + eased fly-to (no OrbitControls)
     input.js          pointer/keyboard → app callbacks, drag-vs-click
-    events.js         conjunction/perihelion prediction (scan + bisection)
+    events.js         multi-planet grouping / conjunction / perihelion search
     mission.js        Hohmann transfers, launch-window solving, probe motion
     journal.js        persistent survey log (fog of war)
     tour.js           narrated tour engine over the navigation API

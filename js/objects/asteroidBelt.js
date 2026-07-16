@@ -8,6 +8,21 @@ import { dotTexture } from './starfield.js';
 
 export class AsteroidBelt {
   constructor({ inner, outer, count, seed }){
+    this.name = 'ASTEROID BELT';
+    this.isSystemFeature = true;
+    this.featureType = 'belt';
+    this.r = outer;
+    this.cfg = {
+      cls: 'SMALL-BODY RESERVOIR',
+      view: outer * 1.45,
+      info: {
+        'REGION': inner.toFixed(1) + '–' + outer.toFixed(1) + ' MODEL UNITS',
+        'DISPLAYED OBJECTS': count.toLocaleString('en-US'),
+        'COMPOSITION': 'ROCK · METAL · CARBON-RICH BODIES',
+        'LOCATION': 'BETWEEN INNER AND OUTER PLANETS',
+        'NOTE': 'PARTICLES ARE A REPRESENTATIVE SAMPLE',
+      },
+    };
     const rnd = mulberry(hashStr(seed || 'belt'));
     this.rocks = [];
     const pos = new Float32Array(count * 3);
@@ -26,6 +41,14 @@ export class AsteroidBelt {
       color: 0x9c9284, size: 0.22, transparent: true, opacity: 0.75,
       map: dotTexture(), alphaTest: 0.05,
       sizeAttenuation: true, depthWrite: false }));
+    // A transparent torus covers the rendered annulus. Picking individual
+    // Points would make this dense feature strangely hard to select.
+    this.pick = new THREE.Mesh(
+      new THREE.TorusGeometry((inner + outer) / 2, (outer - inner) / 2, 8, 128),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    this.pick.rotation.x = Math.PI / 2;
+    this.pick.userData.body = this;
+    this.group = this.pick;
     this.update(0);
   }
 
@@ -45,6 +68,12 @@ export class AsteroidBelt {
   setAppearance(spec){
     if (!spec) return;
     this.points.visible = spec.visible !== false;
+    this.pick.visible = spec.visible !== false;
     if (spec.opacity != null) this.points.material.opacity = spec.opacity;
+  }
+
+  setHover(on){
+    this.points.material.color.set(on ? 0xffc27a : 0x9c9284);
+    this.points.material.size = on ? 0.28 : 0.22;
   }
 }

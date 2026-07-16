@@ -4,6 +4,7 @@
 
 const ACTIVE_CLASS = 'deep-sky-presentation';
 const SPLIT_CLASS = 'deep-sky-split';
+const DEFAULT_REVEAL_DURATION_MS = 1200;
 
 function imageRecord(image){
   if (typeof image === 'string') return { file: image, credit: '', alt: '' };
@@ -26,6 +27,7 @@ export class DeepSkyPresentation {
 
     this.observationImage = document.getElementById('dspObservationImage');
     this.splitImage = document.getElementById('dspSplitImage');
+    this.objectName = document.getElementById('dspObjectName');
     this.observationLabel = document.getElementById('dspObservationLabel');
     this.splitLabel = document.getElementById('dspSplitLabel');
     this.observationCredit = document.getElementById('dspObservationCredit');
@@ -34,7 +36,7 @@ export class DeepSkyPresentation {
     this.status = document.getElementById('dspStatus');
 
     this._ready = false;
-    this._durationMs = 4200;
+    this._durationMs = DEFAULT_REVEAL_DURATION_MS;
     this._loadToken = 0;
     this._pendingLoad = null;
   }
@@ -56,12 +58,14 @@ export class DeepSkyPresentation {
     const fullAlt = record.alt || `${name} source observation`;
     const splitAlt = record.alt || `${name} source observation beside the 3D model`;
     const duration = Number(durationMs);
-    this._durationMs = Number.isFinite(duration) && duration >= 0 ? duration : 4200;
+    this._durationMs = Number.isFinite(duration) && duration >= 0
+      ? duration : DEFAULT_REVEAL_DURATION_MS;
     this.root.style.setProperty('--dsp-reveal-duration', `${this._durationMs}ms`);
     this.root.style.setProperty('--dsp-fade-duration', `${Math.round(this._durationMs * .72)}ms`);
     this.root.setAttribute('aria-label', `${name}: observation and 3D model presentation`);
     this.observationImage.alt = fullAlt;
     this.splitImage.alt = splitAlt;
+    this.objectName.textContent = name;
     this.observationLabel.textContent = `${name} · OBSERVATION`;
     this.splitLabel.textContent = `${name} · OBSERVATION`;
     this.observationCredit.textContent = record.credit;
@@ -114,7 +118,7 @@ export class DeepSkyPresentation {
     this.splitFigure.setAttribute('aria-hidden', 'true');
     document.body.classList.add(ACTIVE_CLASS);
     document.body.classList.remove(SPLIT_CLASS);
-    this.status.textContent = `Transitioning from observation to 3D model`;
+    this.status.textContent = `${this._nameFromLabel()}: transitioning from observation to 3D model`;
   }
 
   showSplit(){
@@ -132,7 +136,7 @@ export class DeepSkyPresentation {
     this.root.querySelector('.dsp-reveal').setAttribute('aria-hidden', 'true');
     this.splitFigure.setAttribute('aria-hidden', 'true');
     document.body.classList.remove(ACTIVE_CLASS, SPLIT_CLASS);
-    this.status.textContent = '3D model';
+    this.status.textContent = `${this._nameFromLabel()} 3D model`;
   }
 
   clear(){
@@ -157,6 +161,7 @@ export class DeepSkyPresentation {
     this.splitImage.alt = '';
     this.observationCredit.textContent = '';
     this.splitCredit.textContent = '';
+    this.objectName.textContent = '';
     this.status.textContent = '';
   }
 

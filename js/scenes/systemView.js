@@ -35,7 +35,7 @@ export class SystemView {
       const p = new Planet(cfg);
       this.scene.add(p.group);
       this.planets.push(p);
-      this.pickTargets.push(p.pick);
+      this.pickTargets.push(...p.pickTargets);
       // focusable moons (Luna): track world position + make clickable
       for (const sat of (p.satellites || [])){
         this.scene.add(sat.body.group);
@@ -46,10 +46,17 @@ export class SystemView {
     this.registerLabels();
 
     this.belt = systemDef.belt ? new AsteroidBelt(systemDef.belt) : null;
-    if (this.belt) this.scene.add(this.belt.points);
+    if (this.belt){
+      this.scene.add(this.belt.points, this.belt.pick);
+      this.pickTargets.push(this.belt.pick);
+    }
 
     this.comet = systemDef.comet ? new Comet(systemDef.comet) : null;
-    if (this.comet) this.comet.addTo(this.scene);
+    if (this.comet){
+      this.comet.addTo(this.scene);
+      this.pickTargets.push(this.comet.pick);
+    }
+    this.features = [this.belt, this.comet].filter(Boolean);
 
     // top-down ortho camera for the minimap, sized to the system
     const e = systemDef.extent;

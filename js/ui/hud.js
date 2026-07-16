@@ -208,7 +208,7 @@ export class Hud {
         const img = landmarkImage(e.id);
         if (img){
           item.classList.add('has-image');
-          const imageURL = new URL(img.file, document.baseURI).href;
+          const imageURL = new URL(img.coverFile || img.file, document.baseURI).href;
           item.style.setProperty('--lm-image', `url("${imageURL}")`);
           item.style.setProperty('--lm-image-position', record.imagePosition || 'center');
         }
@@ -562,11 +562,46 @@ export class Hud {
     for (const ev of events){
       const item = document.createElement('div');
       item.className = 'ev-item';
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+      item.setAttribute('aria-pressed', 'false');
       const l = document.createElement('div'); l.className = 'l'; l.textContent = ev.label;
+      const members = document.createElement('div');
+      members.className = 'm';
+      members.textContent = ev.members
+        ? ev.members.map(name => name.slice(0, 3)).join(' · ') : '';
       const d = document.createElement('div'); d.className = 'd';
-      d.innerHTML = ev.type + ' · <b>' + fmtDateAt(ev.t) + '</b>';
-      item.appendChild(l); item.appendChild(d);
-      item.addEventListener('click', () => onJump(ev));
+      if (ev.groupSize){
+        d.append(document.createTextNode(
+          ev.arcDeg.toFixed(1) + '° ARC · '));
+      } else {
+        d.append(document.createTextNode(ev.type + ' · '));
+      }
+      const date = document.createElement('b');
+      date.textContent = ev.datePrecision === 'YEAR'
+        ? '≈ ' + fmtDateAt(ev.t).slice(0, 4) + ' · MODEL PROJECTION'
+        : fmtDateAt(ev.t);
+      d.appendChild(date);
+      item.title = [ev.members && ev.members.join(' · '), ev.caveat]
+        .filter(Boolean).join('\n');
+      item.appendChild(l);
+      if (ev.members) item.appendChild(members);
+      item.appendChild(d);
+      const activate = () => {
+        for (const sibling of list.querySelectorAll('.ev-item.active')){
+          sibling.classList.remove('active');
+          sibling.setAttribute('aria-pressed', 'false');
+        }
+        onJump(ev);
+        item.classList.add('active');
+        item.setAttribute('aria-pressed', 'true');
+      };
+      item.addEventListener('click', activate);
+      item.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        activate();
+      });
       list.appendChild(item);
     }
   }
@@ -576,7 +611,10 @@ export class Hud {
   }
   /* ---- readouts + time console ---- */
   updateReadouts(time){
-    $('roDate').textContent = time.fmtDate();
+    const held = this.app._heldEvent;
+    $('roDate').textContent = held && held.datePrecision === 'YEAR'
+      ? '≈ ' + time.fmtDateAt(held.t).slice(0, 4) + ' · MODEL'
+      : time.fmtDate();
     $('roRate').textContent = time.fmtRate();
     $('roElapsed').textContent = time.fmtElapsed();
   }
@@ -596,7 +634,18 @@ export class Hud {
 
   _wire(){
     const app = this.app, time = app.time;
-    const setRate = r => { time.setRate(r); this.syncTimeButtons(time.rate); };
+    const clearHeldEvent = () => {
+      app._heldEvent = null;
+      for (const item of document.querySelectorAll('#evList .ev-item.active')){
+        item.classList.remove('active');
+        item.setAttribute('aria-pressed', 'false');
+      }
+    };
+    const setRate = r => {
+      time.setRate(r);
+      if (time.rate !== 0) clearHeldEvent();
+      this.syncTimeButtons(time.rate);
+    };
 
     this._syncAudioButton();
     this._armAudioUnlock();
@@ -611,6 +660,7 @@ export class Hud {
 
     $('scrub').addEventListener('input', e => {
       time.setRate(time.scrubToRate(parseFloat(e.target.value)));
+      if (time.rate !== 0) clearHeldEvent();
       this.syncTimeButtons(time.rate);
     });
     $('btnPlay').addEventListener('click', () => setRate(10));

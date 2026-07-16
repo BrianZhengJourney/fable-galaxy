@@ -235,6 +235,7 @@ export class SurfaceView {
 
 /* gas and ice giants have no surface to descend to */
 export function canDescend(planet){
+  if (!planet || !planet.cfg || planet.cfg.descendable === false) return false;
   const t = planet.cfg.tex.type;
   return t !== 'gas' && !(t === 'ice' && planet.r > 1.2);
 }

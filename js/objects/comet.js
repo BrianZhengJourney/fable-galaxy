@@ -10,6 +10,22 @@ import { makeGlowTexture } from '../utils/textures.js';
 export class Comet {
   constructor(params){
     this.p = params;   // { a, e, period, incl, node, phase }
+    this.name = params.name || 'LONG-PERIOD COMET';
+    this.isSystemFeature = true;
+    this.featureType = 'comet';
+    this.r = 0.5;
+    this.cfg = {
+      cls: 'ICY SMALL BODY',
+      view: 7,
+      info: {
+        'ORBITAL PERIOD': params.period >= 365
+          ? (params.period / 365.25).toFixed(1) + ' yr' : params.period.toFixed(1) + ' d',
+        'ECCENTRICITY': params.e.toFixed(3),
+        'INCLINATION': (params.incl * 180 / Math.PI).toFixed(1) + '°',
+        'PERIHELION': (params.a * (1 - params.e)).toFixed(1) + ' MODEL UNITS',
+        'APHELION': (params.a * (1 + params.e)).toFixed(1) + ' MODEL UNITS',
+      },
+    };
     this.group = new THREE.Group();
 
     this.head = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -17,8 +33,14 @@ export class Comet {
       blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
     this.head.scale.set(3.2, 3.2, 1);
     this.group.add(this.head);
-    this.group.add(new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8),
-      new THREE.MeshBasicMaterial({ color: 0xdff6ff })));
+    this.nucleus = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0xdff6ff }));
+    this.group.add(this.nucleus);
+    this.pick = new THREE.Mesh(
+      new THREE.SphereGeometry(2.2, 12, 8),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    this.pick.userData.body = this;
+    this.group.add(this.pick);
 
     const N = 150;
     this.seeds = [];
@@ -39,6 +61,7 @@ export class Comet {
 
     this._cp = new THREE.Vector3(); this._cd = new THREE.Vector3();
     this._cu = new THREE.Vector3(); this._cv = new THREE.Vector3();
+    this._hovered = false;
   }
 
   addTo(scene){ scene.add(this.group); scene.add(this.tail); }
@@ -69,7 +92,8 @@ export class Comet {
     cu.crossVectors(cv, cd).normalize();
     const tailLen = Math.min(22, Math.max(5, 480 / rSun));
     const glow = Math.min(1, 30 / rSun);
-    this.head.scale.set(2 + glow * 2.4, 2 + glow * 2.4, 1);
+    const hoverScale = this._hovered ? 1.22 : 1;
+    this.head.scale.set((2 + glow * 2.4) * hoverScale, (2 + glow * 2.4) * hoverScale, 1);
     const pos = this.tailGeo.attributes.position.array;
     for (let i = 0; i < this.seeds.length; i++){
       const s = this.seeds[i], d = s.t * tailLen, spread = s.t * tailLen * 0.16;
@@ -78,5 +102,11 @@ export class Comet {
       pos[i*3+2] = cp.z + cd.z*d + cv.z*s.j1*spread + cu.z*s.j2*spread;
     }
     this.tailGeo.attributes.position.needsUpdate = true;
+  }
+
+  setHover(on){
+    this._hovered = on;
+    this.nucleus.material.color.set(on ? 0xffffff : 0xdff6ff);
+    this.head.material.opacity = on ? 1 : 0.82;
   }
 }
