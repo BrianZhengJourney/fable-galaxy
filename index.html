@@ -61,8 +61,72 @@
   <button id="tourBtn" type="button" title="Open guided tours">TOURS</button>
   <button id="landmarkBtn" type="button" title="Explore field stories"
     aria-haspopup="dialog" aria-controls="landmarks" aria-expanded="false">EXPLORE</button>
+  <button id="shareBtn" type="button" title="Share the current view">SHARE</button>
+  <button id="logBtn" type="button" title="Open Captain's Log"
+    aria-haspopup="dialog" aria-controls="journalPanel" aria-expanded="false">LOG <span id="logCount">0</span></button>
+  <button id="instrumentBtn" type="button" title="Open system instruments"
+    aria-haspopup="dialog" aria-controls="instrumentDrawer" aria-expanded="false">DATA</button>
   <div id="tourMenu"></div>
 </nav>
+
+<!-- mobile instrument switcher; the live instruments remain shared with desktop -->
+<aside id="instrumentDrawer" role="dialog" aria-modal="false" aria-labelledby="instrumentTitle"
+  inert aria-hidden="true">
+  <div class="drawer-head">
+    <span id="instrumentTitle">SYSTEM INSTRUMENTS</span>
+    <button id="instrumentClose" type="button" aria-label="Close system instruments">&times;</button>
+  </div>
+  <div class="drawer-actions" role="group" aria-label="Choose an instrument">
+    <button type="button" data-instrument="events" aria-pressed="true">EVENTS</button>
+    <button type="button" data-instrument="plot" aria-pressed="false">PLOT + FLUX</button>
+    <button id="drawerShare" type="button">SHARE VIEW</button>
+    <button id="drawerLog" type="button">CAPTAIN'S LOG</button>
+  </div>
+</aside>
+
+<!-- first-visit orientation -->
+<section id="welcome" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle"
+  aria-describedby="welcomeText" inert aria-hidden="true">
+  <div class="welcome-card">
+    <span class="welcome-kicker">GALAXY 42 · INTERACTIVE FIELD ATLAS</span>
+    <h1 id="welcomeTitle">WORLDS THROUGH TIME</h1>
+    <p id="welcomeText">Choose a first journey. You can leave the guided path at any time.</p>
+    <div class="welcome-journeys">
+      <button type="button" data-journey="sol">
+        <span>01 · LIVE SYSTEM</span><b>Explore the Solar System through time</b>
+      </button>
+      <button type="button" data-journey="observation">
+        <span>02 · OBSERVATION + MODEL</span><b>See how a telescope image becomes a 3D world</b>
+      </button>
+      <button type="button" data-journey="black-hole">
+        <span>03 · RELATIVISTIC ENGINE</span><b>Enter the environment around M87*</b>
+      </button>
+    </div>
+    <button id="welcomeSkip" type="button">START EXPLORING ON MY OWN</button>
+  </div>
+</section>
+
+<!-- lightweight, mode-specific interaction guidance -->
+<div id="contextHint" role="status" aria-live="polite" aria-hidden="true">
+  <span id="contextHintText"></span>
+  <button id="contextHintClose" type="button" aria-label="Dismiss tip">&times;</button>
+</div>
+
+<!-- visible Captain's Log, backed by the existing persistent journal -->
+<section id="journalPanel" role="dialog" aria-modal="true" aria-labelledby="journalTitle"
+  inert aria-hidden="true">
+  <div class="journal-head">
+    <div>
+      <span>PERSONAL FIELD RECORD</span>
+      <h2 id="journalTitle">CAPTAIN'S LOG</h2>
+    </div>
+    <button id="journalClose" type="button" aria-label="Close Captain's Log">&times;</button>
+  </div>
+  <div id="journalSummary"></div>
+  <div id="journalList"></div>
+</section>
+
+<div id="toast" role="status" aria-live="polite" aria-hidden="true"></div>
 
 <!-- curated systems + cosmic landmarks catalog -->
 <div id="landmarks" role="dialog" aria-modal="true" aria-labelledby="lmTitle"

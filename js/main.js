@@ -63,6 +63,7 @@ class App {
     this.rig = new CameraRig(this.camera);
     this.labels = new LabelManager(document.getElementById('labels'));
     this.audio = new AudioEngine();
+    this.journal = new Journal();
     this.hud = new Hud(this);
     this.deepSkyPresentation = new DeepSkyPresentation();
 
@@ -82,7 +83,6 @@ class App {
 
     this.mission = null;
     this.transferOrigin = null;
-    this.journal = new Journal();
     this.tours = new TourEngine(this);
     this._wireTourMenu();
     this.photometer = new Photometer();
@@ -127,6 +127,7 @@ class App {
     this._buildSystem(STAR_CATALOG[0]);          // start at home: SOL
     this.rig.snap({ getTarget: () => ORIGIN, dist: this.systemView.overviewDist(), phi: 1.05 });
     this._applyRoute(initialHash);               // deep link: #/star/body?t=simDays
+    this._wireExperienceShell(initialHash);
     window.addEventListener('hashchange', () => {
       if (!this._settingHash) this._applyRoute();
     });
@@ -198,6 +199,112 @@ class App {
       }
     }
     this._setHash();
+  }
+
+  /* ================= experience shell ================= */
+
+  _wireExperienceShell(initialHash){
+    const share = () => this._shareCurrentView();
+    const openLog = () => this._openJournal();
+    document.getElementById('shareBtn').addEventListener('click', share);
+    document.getElementById('drawerShare').addEventListener('click', share);
+    document.getElementById('logBtn').addEventListener('click', openLog);
+    document.getElementById('drawerLog').addEventListener('click', openLog);
+    document.getElementById('journalClose').addEventListener('click',
+      () => this.hud.setJournalVisible(false));
+
+    for (const button of document.querySelectorAll('[data-journey]')){
+      button.addEventListener('click', () => {
+        this.hud.completeOnboarding();
+        if (button.dataset.journey === 'sol') this.goHome();
+        else if (button.dataset.journey === 'observation'){
+          const entry = LANDMARKS.find(candidate => candidate.id === 'pillars-of-creation');
+          if (entry) this.enterLandmark(entry);
+        } else if (button.dataset.journey === 'black-hole'){
+          const entry = LANDMARKS.find(candidate => candidate.id === 'm87-star');
+          if (entry) this.enterLandmark(entry);
+        }
+        this._showContextHint();
+      });
+    }
+    document.getElementById('welcomeSkip').addEventListener('click', () => {
+      this.hud.completeOnboarding();
+      this._showContextHint();
+    });
+
+    this._experienceReady = true;
+    this._refreshJournal();
+    const bareEntry = !initialHash || initialHash === '#';
+    if (bareEntry && !this.hud.onboardingSeen()) this.hud.setWelcomeVisible(true);
+    else this._showContextHint();
+  }
+
+  _showContextHint(){
+    const hints = {
+      system: 'DRAG TO ORBIT · SCROLL OR PINCH TO ZOOM · TAP A WORLD TO INSPECT',
+      galaxy: 'DRAG TO ROTATE · TAP A STAR ONCE TO INSPECT, AGAIN TO JUMP',
+      landmark: 'DRAG TO INSPECT DEPTH · USE THE VIEW MODES AND TIMELINE TO COMPARE EVIDENCE',
+      surface: 'DRAG TO ORBIT THE WORLD · SCROLL OR PINCH TO CHANGE ALTITUDE',
+      sky: 'DRAG TO LOOK AROUND · SCROLL OR PINCH TO CHANGE FIELD OF VIEW',
+    };
+    this.hud.showContextHint(this.mode, hints[this.mode]);
+  }
+
+  _refreshJournal(){
+    if (!this.exploreSections) return;
+    const total = this.exploreSections.reduce((sum, section) => sum + section.items.length, 0);
+    this.hud.renderJournal(this.journal.entries(), total, entry => {
+      this.hud.setJournalVisible(false);
+      if (entry.kind === 'landmark'){
+        const landmark = LANDMARKS.find(candidate => candidate.id === entry.target);
+        if (landmark) this.enterLandmark(landmark);
+        else this.hud.toast('FIELD RECORD IS NO LONGER IN THE CURATED ATLAS');
+        return;
+      }
+      const system = STAR_CATALOG.find(candidate =>
+        candidate.name === (entry.target || entry.name || entry.key));
+      if (system) this.enterSystem(system, true);
+      else this.hud.toast('SYSTEM RECORD IS NOT AVAILABLE IN THIS BUILD');
+    });
+  }
+
+  _openJournal(){
+    this._refreshJournal();
+    this.hud.setJournalVisible(true);
+  }
+
+  _currentViewTitle(){
+    if (this.mode === 'landmark' && this.landmarkView) return this.landmarkView.entry.name;
+    if (this.focus) return this.focus.name || (this.focus.cfg && this.focus.cfg.name) || this.systemRec.name;
+    if (this.mode === 'galaxy') return 'THE GALAXY MAP';
+    return this.systemRec ? this.systemRec.name : 'GALAXY 42';
+  }
+
+  async _shareCurrentView(){
+    this._setHash();
+    const title = this._currentViewTitle() + ' · GALAXY 42';
+    const data = { title, text: 'Explore ' + this._currentViewTitle() + ' in GALAXY 42.', url: location.href };
+    if (navigator.share){
+      try{
+        await navigator.share(data);
+        this.hud.toast('VIEW SHARED');
+        return;
+      }catch(error){
+        if (error && error.name === 'AbortError') return;
+      }
+    }
+    try{
+      await navigator.clipboard.writeText(data.url);
+      this.hud.toast('VIEW LINK COPIED');
+    }catch(error){
+      const field = document.createElement('textarea');
+      field.value = data.url; field.setAttribute('readonly', '');
+      field.style.position = 'fixed'; field.style.opacity = '0';
+      document.body.appendChild(field); field.select();
+      const copied = document.execCommand('copy');
+      field.remove();
+      this.hud.toast(copied ? 'VIEW LINK COPIED' : 'COPY THE URL FROM YOUR ADDRESS BAR');
+    }
   }
 
   /* ---- optional post-processing bloom; sprite glow is the fallback ---- */
@@ -360,6 +467,12 @@ class App {
     this.landmarkView = new LandmarkView(entry);
     this.mode = 'landmark';
     this.hud.setMode('landmark');
+    this.journal.markVisited(entry.name, this.time.fmtDate(), {
+      key: 'LANDMARK::' + entry.id,
+      kind: 'landmark',
+      target: entry.id,
+    });
+    this._refreshJournal();
     this.focus = null;
     // hide system-scale instruments, show the story
     this.hud.hidePanel();
@@ -680,7 +793,11 @@ class App {
     const def = rec.sol ? SOL_SYSTEM : generateSystem(rec);
     this.systemView = new SystemView(def, this.labels);
     this.systemRec = rec;
-    this.journal.markVisited(rec.name, this.time.fmtDate());
+    this.journal.markVisited(rec.name, this.time.fmtDate(), {
+      kind: 'system',
+      target: rec.name,
+    });
+    this._refreshJournal();
     if (this.photometer) this.photometer.reset();
     this.mode = 'system';
     this.hud.setMode('system');
@@ -1137,6 +1254,7 @@ class App {
     }
     this.hud.setCrumbs(crumbs);
     this._setHash();   // every navigation change is a shareable URL
+    if (this._experienceReady) this._showContextHint();
   }
 
   /* ================= picking ================= */
@@ -1365,14 +1483,22 @@ class App {
 
       this._renderMain(this.systemView.scene);
 
-      // minimap via scissor (matches #mapFrame CSS)
-      const ms = 170, mx = 21, my = 119;
-      R.setScissorTest(true);
-      R.setViewport(mx, my, ms, ms);
-      R.setScissor(mx, my, ms, ms);
-      R.clear(true, true, false);
-      R.render(this.systemView.scene, this.systemView.mapCam);
-      R.setScissorTest(false);
+      // Minimap follows its responsive DOM frame; a closed mobile drawer has
+      // a zero-sized frame and therefore costs no second render.
+      const mapFrame = document.getElementById('mapFrame');
+      const mapRect = mapFrame.getBoundingClientRect();
+      if (!mapFrame.classList.contains('hidden') && mapRect.width > 2 && mapRect.height > 2){
+        const mx = Math.round(mapRect.left);
+        const my = Math.round(this.H - mapRect.bottom);
+        const mw = Math.round(mapRect.width);
+        const mh = Math.round(mapRect.height);
+        R.setScissorTest(true);
+        R.setViewport(mx, my, mw, mh);
+        R.setScissor(mx, my, mw, mh);
+        R.clear(true, true, false);
+        R.render(this.systemView.scene, this.systemView.mapCam);
+        R.setScissorTest(false);
+      }
     } else {
       this.galaxyView.update(dt);
       this.labels.update(this.camera, this.W, this.H);

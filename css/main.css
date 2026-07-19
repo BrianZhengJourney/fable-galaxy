@@ -178,10 +178,94 @@ body.deep-sky-split #stage{ transform:translateX(-25vw); }
 }
 #audioBtn.on{ color:var(--amber); border-color:rgba(255,180,94,.5);
   text-shadow:0 0 8px rgba(255,180,94,.6); }
+#instrumentBtn{ display:none; }
+#logCount{ color:var(--cyan); margin-left:3px; }
 body[data-mode="landmark"] #crumbs,
 body[data-mode="landmark"] #mapBtn,
 body[data-mode="landmark"] #tourBtn{ display:none; }
 body.explore-open #hdr, body.explore-open #hints{ opacity:0; pointer-events:none; }
+
+/* ---- orientation, sharing feedback and persistent field log ---- */
+#welcome{
+  position:fixed; inset:0; z-index:30; display:none; place-items:center; padding:28px;
+  background:
+    radial-gradient(circle at 26% 18%, rgba(98,230,255,.13), transparent 30%),
+    radial-gradient(circle at 76% 72%, rgba(174,91,211,.12), transparent 34%),
+    rgba(1,5,9,.88); backdrop-filter:blur(18px);
+}
+#welcome.show{ display:grid; }
+.welcome-card{ width:min(920px, 94vw); padding:clamp(24px, 4vw, 50px);
+  border:1px solid rgba(98,230,255,.22); background:rgba(2,8,13,.84);
+  box-shadow:0 28px 100px rgba(0,0,0,.72); }
+.welcome-kicker{ display:block; color:var(--amber); font:8px var(--mono);
+  letter-spacing:.28em; margin-bottom:12px; }
+#welcomeTitle{ color:#f4fbff; font:500 clamp(38px, 6vw, 72px)/.92 var(--display);
+  letter-spacing:.025em; text-shadow:0 0 30px rgba(98,230,255,.16); }
+#welcomeText{ max-width:54ch; margin-top:13px; color:rgba(207,238,247,.62);
+  font-size:13px; line-height:1.55; }
+.welcome-journeys{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px;
+  margin-top:28px; }
+.welcome-journeys button{ appearance:none; min-height:150px; padding:18px; cursor:pointer;
+  text-align:left; display:flex; flex-direction:column; justify-content:space-between;
+  border:1px solid rgba(98,230,255,.16); background:rgba(5,16,23,.54); color:#eefbff;
+  transition:transform .2s, border-color .2s, background .2s; }
+.welcome-journeys button:hover, .welcome-journeys button:focus-visible{ transform:translateY(-3px);
+  border-color:var(--cyan); background:rgba(13,37,48,.72); outline:none; }
+.welcome-journeys span{ color:rgba(98,230,255,.62); font:8px var(--mono); letter-spacing:.18em; }
+.welcome-journeys b{ font:500 21px/1.14 var(--display); letter-spacing:.015em; }
+#welcomeSkip{ appearance:none; margin-top:18px; padding:8px 0; border:0; background:transparent;
+  color:rgba(207,238,247,.42); cursor:pointer; font:8px var(--mono); letter-spacing:.2em; }
+#welcomeSkip:hover, #welcomeSkip:focus-visible{ color:var(--cyan); outline:none; }
+
+#contextHint{ position:fixed; left:50%; bottom:116px; z-index:18; display:flex;
+  align-items:center; gap:14px; max-width:min(560px, calc(100vw - 32px)); padding:10px 12px 10px 15px;
+  opacity:0; transform:translate(-50%, 8px); pointer-events:none;
+  border:1px solid rgba(98,230,255,.22); border-left:2px solid var(--cyan);
+  background:rgba(3,10,15,.88); backdrop-filter:blur(12px); box-shadow:0 12px 38px rgba(0,0,0,.5);
+  transition:opacity .25s, transform .25s; }
+#contextHint.show{ opacity:1; transform:translate(-50%,0); pointer-events:auto; }
+#contextHintText{ color:rgba(226,248,252,.82); font:9px/1.45 var(--mono); letter-spacing:.1em; }
+#contextHintClose{ appearance:none; border:0; background:transparent; color:var(--cyan-dim);
+  cursor:pointer; font-size:18px; line-height:1; }
+
+#journalPanel{ position:fixed; top:20px; right:20px; bottom:20px; z-index:24;
+  width:min(460px, calc(100vw - 40px)); display:flex; flex-direction:column;
+  opacity:0; transform:translateX(24px); pointer-events:none;
+  background:linear-gradient(155deg, rgba(4,13,19,.97), rgba(2,7,11,.95));
+  border:1px solid rgba(98,230,255,.22); backdrop-filter:blur(20px);
+  box-shadow:-24px 0 90px rgba(0,0,0,.68); transition:opacity .25s, transform .3s; }
+#journalPanel.show{ opacity:1; transform:translateX(0); pointer-events:auto; }
+.journal-head{ display:flex; justify-content:space-between; align-items:flex-start; padding:22px 22px 17px;
+  border-bottom:1px solid rgba(98,230,255,.11); }
+.journal-head span{ color:var(--amber); font:8px var(--mono); letter-spacing:.24em; }
+.journal-head h2{ margin-top:5px; color:#f3fbff; font:500 34px/.95 var(--display); }
+#journalClose{ appearance:none; border:0; background:transparent; color:var(--cyan-dim);
+  cursor:pointer; font-size:28px; line-height:1; }
+#journalSummary{ padding:13px 22px; color:rgba(207,238,247,.56); border-bottom:1px solid rgba(98,230,255,.08);
+  font:9px var(--mono); letter-spacing:.14em; }
+#journalSummary b{ color:var(--cyan); font-weight:400; }
+#journalList{ min-height:0; overflow-y:auto; padding:8px 14px 22px; scrollbar-width:thin;
+  scrollbar-color:var(--cyan-dim) transparent; }
+.journal-entry{ appearance:none; width:100%; display:grid; grid-template-columns:1fr auto;
+  grid-template-areas:"kind visits" "name visits" "date visits"; gap:3px 12px;
+  padding:13px 9px; text-align:left; cursor:pointer; color:var(--text); background:transparent;
+  border:0; border-bottom:1px solid rgba(98,230,255,.09); }
+.journal-entry:hover, .journal-entry:focus-visible{ background:rgba(98,230,255,.06); outline:none; }
+.journal-entry .kind{ grid-area:kind; color:rgba(255,180,94,.58); font:7.5px var(--mono); letter-spacing:.18em; }
+.journal-entry .name{ grid-area:name; color:#effbff; font:600 15px var(--sans); letter-spacing:.08em; }
+.journal-entry .date{ grid-area:date; color:rgba(207,238,247,.38); font:8px var(--mono); letter-spacing:.08em; }
+.journal-entry .visits{ grid-area:visits; align-self:center; color:var(--cyan); font:10px var(--mono); }
+.journal-empty{ padding:28px 10px; color:rgba(207,238,247,.48); font:11px/1.7 var(--mono); }
+
+#toast{ position:fixed; left:50%; top:78px; z-index:32; padding:9px 14px;
+  opacity:0; transform:translate(-50%,-7px); pointer-events:none;
+  color:#eaffff; background:rgba(4,16,22,.92); border:1px solid rgba(98,230,255,.28);
+  font:9px var(--mono); letter-spacing:.15em; transition:opacity .2s, transform .2s; }
+#toast.show{ opacity:1; transform:translate(-50%,0); }
+
+/* Mobile-only instrument drawer shell. The existing live panels are revealed
+   above it one at a time, so desktop and mobile never maintain duplicate data. */
+#instrumentDrawer{ display:none; }
 
 /* ---- target data panel ---- */
 #panel{
@@ -665,7 +749,55 @@ body.story-mode #console{ opacity:0; pointer-events:none; transform:translateX(-
   #crumbs .crumb.here{ max-width:35vw; }
   #hints{ top:14px; right:18px; gap:4px; }
   #hints > button{ min-height:30px; padding:0 7px; font-size:7.5px; letter-spacing:.10em; }
-  #audioBtn{ display:none; }
+  #audioBtn, #tourBtn, #shareBtn, #logBtn{ display:none; }
+  #instrumentBtn{ display:block; }
+
+  #welcome{ padding:12px; }
+  .welcome-card{ width:100%; max-height:calc(100vh - 24px); overflow-y:auto; padding:22px 18px; }
+  #welcomeTitle{ font-size:42px; }
+  .welcome-journeys{ grid-template-columns:1fr; gap:8px; margin-top:20px; }
+  .welcome-journeys button{ min-height:92px; padding:13px 14px; }
+  .welcome-journeys b{ font-size:18px; }
+  #contextHint{ bottom:82px; width:calc(100vw - 24px); }
+
+  #journalPanel{ inset:8px; width:auto; }
+  .journal-head{ padding:18px 16px 14px; }
+  .journal-head h2{ font-size:31px; }
+  #journalSummary{ padding:12px 16px; }
+  #journalList{ padding:7px 9px 18px; }
+
+  #instrumentDrawer{ position:fixed; left:12px; right:12px; bottom:12px; z-index:16;
+    min-height:58px; padding:8px 9px; background:rgba(3,10,15,.94);
+    border:1px solid rgba(98,230,255,.24); backdrop-filter:blur(14px);
+    box-shadow:0 -16px 50px rgba(0,0,0,.58); }
+  body.instruments-open #instrumentDrawer{ display:block; }
+  .drawer-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:7px;
+    color:var(--amber); font:7.5px var(--mono); letter-spacing:.2em; }
+  #instrumentClose{ appearance:none; border:0; background:transparent; color:var(--cyan-dim);
+    cursor:pointer; font-size:19px; line-height:1; }
+  .drawer-actions{ display:grid; grid-template-columns:repeat(4, 1fr); gap:5px; }
+  .drawer-actions button{ appearance:none; min-height:30px; padding:4px; cursor:pointer;
+    color:rgba(207,238,247,.55); background:rgba(5,16,23,.58);
+    border:1px solid rgba(98,230,255,.16); font:7px/1.2 var(--mono); letter-spacing:.08em; }
+  .drawer-actions button[aria-pressed="true"]{ color:#031118; background:var(--cyan); border-color:var(--cyan); }
+  body:not([data-mode="system"]) .drawer-actions{ grid-template-columns:1fr 1fr; }
+  body:not([data-mode="system"]) .drawer-actions [data-instrument]{ display:none; }
+
+  /* System instruments are closed by default on phones. */
+  #events.show, #photometer.show, #mapFrame:not(.hidden){ display:none; }
+  body.instruments-open{ --instrument-bottom:92px; }
+  body.instruments-open #console{ opacity:0; pointer-events:none; transform:translateX(-50%) translateY(12px); }
+  body.instruments-open[data-instrument-panel="events"] #events.show{
+    display:block; left:12px; right:12px; bottom:var(--instrument-bottom); width:auto;
+    max-height:min(58vh, 470px); overflow-y:auto; z-index:15; }
+  body.instruments-open[data-instrument-panel="plot"] #mapFrame:not(.hidden){
+    display:block; left:12px; bottom:calc(var(--instrument-bottom) + 9px);
+    width:calc(48vw - 17px); height:calc(48vw - 17px); z-index:15; }
+  body.instruments-open[data-instrument-panel="plot"] #photometer.show{
+    display:block; left:auto; right:12px; bottom:calc(var(--instrument-bottom) + 9px);
+    width:calc(52vw - 19px); z-index:15; }
+  body.instruments-open[data-instrument-panel="plot"] #photoCanvas{ width:100%; height:auto; }
+
   #landmarks{ inset:8px; width:auto; max-height:none; }
   .lm-head{ padding:14px 14px 12px; }
   .lm-title{ font-size:31px; }

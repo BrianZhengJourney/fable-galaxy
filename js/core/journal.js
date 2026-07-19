@@ -31,15 +31,24 @@ export class Journal {
     }catch(e){ this.data = {}; }
   }
 
-  markVisited(name, simDate){
-    const rec = this.data[name] || { visits: 0, first: simDate };
+  markVisited(name, simDate, meta = {}){
+    const key = meta.key || name;
+    const rec = this.data[key] || { visits: 0, first: simDate };
     rec.visits += 1;
     rec.last = simDate;
-    this.data[name] = rec;
+    rec.name = meta.name || rec.name || name;
+    if (meta.kind) rec.kind = meta.kind;
+    if (meta.target) rec.target = meta.target;
+    this.data[key] = rec;
     try{ localStorage.setItem(KEY, JSON.stringify(this.data)); }catch(e){ /* private mode */ }
   }
 
   isVisited(name){ return !!this.data[name]; }
   visitCount(name){ return this.data[name] ? this.data[name].visits : 0; }
   surveyed(){ return Object.keys(this.data).length; }
+  entries(){
+    return Object.entries(this.data)
+      .map(([key, rec]) => ({ key, ...rec, name: rec.name || key }))
+      .sort((a, b) => String(b.last || '').localeCompare(String(a.last || '')));
+  }
 }

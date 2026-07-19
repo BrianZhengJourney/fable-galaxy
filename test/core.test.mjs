@@ -85,6 +85,37 @@ test('journal migrates the legacy brand key without losing visits', () => {
   }
 });
 
+test('journal exposes systems and field stories as recent, navigable records', () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const storage = new Map();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: key => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+    },
+  });
+
+  try{
+    const journal = new Journal();
+    journal.markVisited('SOL', '2026-07-19 12:00', { kind: 'system', target: 'SOL' });
+    journal.markVisited('PILLARS OF CREATION', '2026-07-20 12:00', {
+      key: 'LANDMARK::pillars-of-creation',
+      kind: 'landmark',
+      target: 'pillars-of-creation',
+    });
+    journal.markVisited('SOL', '2026-07-21 12:00', { kind: 'system', target: 'SOL' });
+
+    assert.equal(journal.visitCount('SOL'), 2);
+    assert.equal(journal.entries()[0].name, 'SOL');
+    assert.deepEqual(journal.entries().map(entry => entry.kind), ['system', 'landmark']);
+    assert.equal(journal.entries()[1].target, 'pillars-of-creation');
+  }finally{
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+    else delete globalThis.localStorage;
+  }
+});
+
 test('featured resource scopes dispose once and stop late callbacks', () => {
   const scope = new ResourceScope('test-featured');
   let disposed = 0, calls = 0;
@@ -955,6 +986,28 @@ test('Explore presents image-led cards while retaining accessible catalog detail
   assert.match(main,
     /record\.kind === 'system'[\s\S]{0,140}?setLandmarksVisible\(false\)[\s\S]{0,100}?enterSystem\(record\.entry\.rec, true\)/,
     'choosing a system must close Explore before entering the live system');
+});
+
+test('experience shell keeps onboarding, mobile instruments, sharing and the log discoverable', async () => {
+  const [markup, css, hud, main] = await Promise.all([
+    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../css/main.css', import.meta.url), 'utf8'),
+    readFile(new URL('../js/ui/hud.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/main.js', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(markup, /id="welcome"[^>]+role="dialog"[^>]+aria-modal="true"/,
+    'the first-run journey chooser must be a modal dialog');
+  assert.match(markup, /data-journey="sol"[\s\S]+data-journey="observation"[\s\S]+data-journey="black-hole"/,
+    'the entry experience must expose three distinct journeys');
+  assert.match(markup, /id="instrumentDrawer"[^>]+role="dialog"/,
+    'mobile instruments need one explicit drawer surface');
+  assert.match(css, /#events\.show, #photometer\.show, #mapFrame:not\(\.hidden\)\{ display:none; \}/,
+    'system instruments must stay closed by default on phones');
+  assert.match(hud, /renderJournal\(entries, total, onPick\)/,
+    'the persistent journal must have a visible renderer');
+  assert.match(main, /navigator\.share[\s\S]+navigator\.clipboard\.writeText/,
+    'sharing must retain a clipboard fallback');
 });
 
 test('black-hole observation chapters preserve a persistent 3D hero', async () => {

@@ -18,6 +18,7 @@ export class Hud {
     this.app = app;
     this.tickTimers = [];
     this._wire();
+    this._wireInstrumentDrawer();
   }
 
   /* ---- target data panel ---- */
@@ -120,6 +121,157 @@ export class Hud {
   }
 
   setSector(name){ $('roSector').textContent = name; }
+
+  /* ---- first-run orientation + lightweight feedback ---- */
+  onboardingSeen(){
+    try{ return localStorage.getItem('galaxy-42-onboarded-v1') === 'true'; }
+    catch(e){ return false; }
+  }
+  completeOnboarding(){
+    try{ localStorage.setItem('galaxy-42-onboarded-v1', 'true'); }catch(e){ /* private mode */ }
+    this.setWelcomeVisible(false);
+  }
+  setWelcomeVisible(on){
+    const panel = $('welcome');
+    const visible = !!on;
+    if (visible === panel.classList.contains('show')) return;
+    if (visible){
+      this._welcomeSiblingInert = new Map();
+      for (const sibling of document.body.children){
+        if (sibling === panel || sibling.tagName === 'SCRIPT') continue;
+        this._welcomeSiblingInert.set(sibling, sibling.hasAttribute('inert'));
+        sibling.setAttribute('inert', '');
+      }
+    }
+    panel.classList.toggle('show', visible);
+    setInteractive(panel, visible);
+    if (visible) requestAnimationFrame(() => panel.querySelector('[data-journey]')?.focus());
+    else {
+      for (const [sibling, wasInert] of this._welcomeSiblingInert || []){
+        if (sibling.isConnected) sibling.toggleAttribute('inert', wasInert);
+      }
+      this._welcomeSiblingInert = null;
+    }
+  }
+  showContextHint(key, text){
+    if (!text || $('welcome').classList.contains('show')) return;
+    const storageKey = 'galaxy-42-hint-' + key;
+    try{
+      if (localStorage.getItem(storageKey)) return;
+      localStorage.setItem(storageKey, 'true');
+    }catch(e){ /* private mode: still show the hint */ }
+    clearTimeout(this._hintTimer);
+    $('contextHintText').textContent = text;
+    const hint = $('contextHint');
+    hint.classList.add('show');
+    hint.setAttribute('aria-hidden', 'false');
+    this._hintTimer = setTimeout(() => this.hideContextHint(), 6500);
+  }
+  hideContextHint(){
+    clearTimeout(this._hintTimer);
+    const hint = $('contextHint');
+    hint.classList.remove('show');
+    hint.setAttribute('aria-hidden', 'true');
+  }
+  toast(message){
+    clearTimeout(this._toastTimer);
+    const toast = $('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    toast.setAttribute('aria-hidden', 'false');
+    this._toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+      toast.setAttribute('aria-hidden', 'true');
+    }, 2600);
+  }
+
+  /* ---- mobile system instruments ---- */
+  _wireInstrumentDrawer(){
+    $('instrumentBtn').addEventListener('click', () =>
+      this.setInstrumentDrawerVisible(!document.body.classList.contains('instruments-open')));
+    $('instrumentClose').addEventListener('click', () => this.setInstrumentDrawerVisible(false));
+    for (const button of document.querySelectorAll('[data-instrument]')){
+      button.addEventListener('click', () => {
+        document.body.dataset.instrumentPanel = button.dataset.instrument;
+        for (const candidate of document.querySelectorAll('[data-instrument]'))
+          candidate.setAttribute('aria-pressed', String(candidate === button));
+      });
+    }
+  }
+  setInstrumentDrawerVisible(on){
+    const drawer = $('instrumentDrawer');
+    const visible = !!on;
+    document.body.classList.toggle('instruments-open', visible);
+    if (visible && !document.body.dataset.instrumentPanel)
+      document.body.dataset.instrumentPanel = 'events';
+    $('instrumentBtn').setAttribute('aria-expanded', String(visible));
+    setInteractive(drawer, visible);
+    if (visible) requestAnimationFrame(() => {
+      const initial = document.body.dataset.mode === 'system'
+        ? drawer.querySelector('[aria-pressed="true"]') : $('drawerShare');
+      initial?.focus();
+    });
+  }
+
+  /* ---- visible Captain's Log ---- */
+  renderJournal(entries, total, onPick){
+    $('logCount').textContent = String(entries.length);
+    $('journalSummary').innerHTML = '<b>' + entries.length + '</b> DESTINATIONS RECORDED · ' +
+      total + ' IN THE CURATED COLLECTION';
+    const list = $('journalList');
+    list.innerHTML = '';
+    if (!entries.length){
+      const empty = document.createElement('p');
+      empty.className = 'journal-empty';
+      empty.textContent = 'No field records yet. Enter a world system or a featured cosmic environment to begin.';
+      list.appendChild(empty);
+      return;
+    }
+    for (const entry of entries){
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'journal-entry';
+      button.setAttribute('aria-label', 'Return to ' + entry.name + ', ' + entry.visits + ' visits');
+      const kind = document.createElement('span'); kind.className = 'kind';
+      kind.textContent = entry.kind === 'landmark' ? 'FIELD STORY' : 'WORLD SYSTEM';
+      const name = document.createElement('span'); name.className = 'name'; name.textContent = entry.name;
+      const date = document.createElement('span'); date.className = 'date';
+      date.textContent = 'LAST VISIT · ' + (entry.last || entry.first || 'UNKNOWN');
+      const visits = document.createElement('span'); visits.className = 'visits';
+      visits.textContent = '×' + entry.visits;
+      button.append(kind, name, date, visits);
+      button.addEventListener('click', () => onPick(entry));
+      list.appendChild(button);
+    }
+  }
+  setJournalVisible(on){
+    const panel = $('journalPanel');
+    const visible = !!on;
+    if (visible === panel.classList.contains('show')) return;
+    if (visible){
+      this.setInstrumentDrawerVisible(false);
+      this.setLandmarksVisible(false);
+      this._journalReturnFocus = document.activeElement;
+      this._journalSiblingInert = new Map();
+      for (const sibling of document.body.children){
+        if (sibling === panel || sibling.tagName === 'SCRIPT') continue;
+        this._journalSiblingInert.set(sibling, sibling.hasAttribute('inert'));
+        sibling.setAttribute('inert', '');
+      }
+    }
+    panel.classList.toggle('show', visible);
+    $('logBtn').setAttribute('aria-expanded', String(visible));
+    setInteractive(panel, visible);
+    if (visible) requestAnimationFrame(() => $('journalClose').focus());
+    else {
+      for (const [sibling, wasInert] of this._journalSiblingInert || []){
+        if (sibling.isConnected) sibling.toggleAttribute('inert', wasInert);
+      }
+      this._journalSiblingInert = null;
+      if (this._journalReturnFocus instanceof HTMLElement && this._journalReturnFocus.isConnected)
+        this._journalReturnFocus.focus();
+      this._journalReturnFocus = null;
+    }
+  }
 
   /* ---- curated cosmic landmarks catalog + story card ---- */
   buildLandmarks(sections, onPick){
@@ -550,7 +702,13 @@ export class Hud {
     source.textContent = (copy.sourceLabel || epoch.sourceLabel || 'SOURCE') + ' ↗';
     if (active) $('solEpochCopy').setAttribute('aria-labelledby', active.id);
   }
-  setMode(mode){ document.body.dataset.mode = mode; }
+  setMode(mode){
+    document.body.dataset.mode = mode;
+    if (mode !== 'system') this.setInstrumentDrawerVisible(false);
+    $('instrumentBtn').textContent = mode === 'system' ? 'DATA' : 'MORE';
+    $('instrumentBtn').title = mode === 'system' ? 'Open system instruments' : 'Open atlas actions';
+    $('instrumentTitle').textContent = mode === 'system' ? 'SYSTEM INSTRUMENTS' : 'ATLAS ACTIONS';
+  }
   setEventsVisible(on){ $('events').classList.toggle('show', on); }
   setMissionVisible(on){ $('mission').classList.toggle('show', on); }
   setMissionBody(html){ $('msBody').innerHTML = html; }
@@ -677,6 +835,7 @@ export class Hud {
     $('brandBtn').addEventListener('click', () => app.exitToGalaxy());
     $('mapBtn').addEventListener('click', () => app.exitToGalaxy());
     $('audioBtn').addEventListener('click', () => this._toggleAudio());
+    $('contextHintClose').addEventListener('click', () => this.hideContextHint());
   }
 
   /* ---- ambient soundscape + UI sounds (see core AudioEngine) ---- */
